@@ -164,7 +164,7 @@ const showProfile   = ref(false)
 const username        = ref('Player')
 const userUid         = ref('000000000')
 const wallet          = ref(0)
-const avatar          = ref('👨')
+const avatar          = ref('👤')
 const userFirebaseUid = ref('')
 
 let unsubscribe    = null
@@ -210,7 +210,6 @@ onMounted(async () => {
   if (savedAvatar)      avatar.value          = savedAvatar
 
   if (savedFirebaseUid) {
-    // Jerena mivantana ao Firestore ny username — tsy miankina amin'ny token
     await fetchUsernameFromFirestore(savedFirebaseUid)
     initMyPresence(savedFirebaseUid)
   } else {
@@ -231,7 +230,6 @@ const handleBeforeUnload = () => {
   if (!token || !myPresenceRef) return
 }
 
-// ── Firestore: getDoc mivantana (tsy miankina amin'ny token) ──
 const fetchUsernameFromFirestore = async (fbUid) => {
   try {
     const userRef  = doc(fsDb, 'users', fbUid)
@@ -240,7 +238,6 @@ const fetchUsernameFromFirestore = async (fbUid) => {
     if (snap.exists()) {
       const data = snap.data()
 
-      // Mameno ny state amin'ny data avy ao Firestore
       if (data.wallet !== undefined) {
         wallet.value = data.wallet
         localStorage.setItem('user_wallet', data.wallet)
@@ -255,20 +252,16 @@ const fetchUsernameFromFirestore = async (fbUid) => {
                           data.username.trim() !== ''
 
       if (hasUsername) {
-        // ✅ Misy username → tsy mampiseho modal, manomboka listener
         username.value = data.username
         startFirestoreListener(fbUid)
       } else {
-        // ❌ Tsy misy username → mampiseho modal
         showUsername.value = true
         startFirestoreListener(fbUid)
       }
     } else {
-      // Tsy misy document → compte vaovao, mila username
       showUsername.value = true
     }
   } catch {
-    // Raha fail ny Firestore (offline, etc.) → jerena ny localStorage
     const savedUsername = localStorage.getItem('user_username')
     const hasUsername   = savedUsername &&
                           savedUsername !== 'New Player' &&
@@ -293,7 +286,6 @@ const startFirestoreListener = (fbUid) => {
       if (data.username && data.username !== 'New Player' && data.username !== '') {
         username.value = data.username
         localStorage.setItem('user_username', data.username)
-        // Raha voaroaka ny modal username (efa napetraka ny username) → afatsy
         if (showUsername.value) showUsername.value = false
       }
       if (data.wallet !== undefined) {
