@@ -13,18 +13,20 @@
         <span class="material-icons">close</span>
       </button>
 
-      <h2 class="mtitle">PROFILE</h2>
+      <h2 class="mtitle">{{ isViewer ? 'PROFILE' : 'PROFILE' }}</h2>
 
-      <!-- ── Avatar + Identity (flex row) ──────────────────── -->
+      <!-- ── Avatar + Identity ──────────────────────────────── -->
       <div class="profile-header">
 
-        <!-- Avatar avec bouton edit coin bas-droit -->
+        <!-- Avatar -->
         <div class="avatar-wrap">
           <div class="avatar-ring">
             <div class="avatar-emoji">{{ currentAvatar }}</div>
             <div v-if="avatarSaving" class="avatar-saving-spin"></div>
           </div>
+          <!-- Bouton edit: mode propre uniquement -->
           <button
+            v-if="!isViewer"
             class="btn-edit-avatar"
             @click="showAvatarPicker = true"
             :disabled="avatarSaving"
@@ -32,49 +34,163 @@
           >
             <span class="material-icons">edit</span>
           </button>
+          <!-- Statut enligne: mode viewer -->
+          <div v-if="isViewer" class="viewer-status" :class="viewerOnline ? 'vstatus-on' : 'vstatus-off'">
+            <span class="vstatus-dot">●</span>
+          </div>
         </div>
 
-        <!-- Username + UID flex amin'ilay avatar -->
+        <!-- Username + UID -->
         <div class="identity-block">
-          <div class="p-name">{{ username }}</div>
-          <div class="p-uid">
-            <span class="material-icons uid-icon">tag</span>
-            {{ userUid }}
+          <div class="p-name">{{ displayUsername }}</div>
+
+          <!-- Mode propre: UID + copy -->
+          <div class="p-uid-row">
+            <div class="p-uid">
+              <span class="uid-label">UID</span>
+              <span class="uid-val">{{ displayUid }}</span>
+            </div>
+            <button
+              class="btn-copy-uid"
+              :class="{ copied: uidCopied }"
+              :disabled="uidCopied"
+              @click="copyUid"
+              :title="uidCopied ? 'Copied!' : 'Copy UID'"
+            >
+              <span class="material-icons copy-icon">{{ uidCopied ? 'check_circle' : 'content_copy' }}</span>
+            </button>
+          </div>
+
+          <!-- Mode viewer: presence -->
+          <div v-if="isViewer" class="viewer-presence" :class="viewerOnline ? 'vpres-on' : 'vpres-off'">
+            <span v-if="viewerOnline">● Online</span>
+            <span v-else>● {{ viewerLastSeenText }}</span>
           </div>
         </div>
 
       </div>
 
-      <!-- ── Balance ───────────────────────────────────────── -->
-      <div class="balance-card">
-        <span class="material-icons balance-icon">account_balance_wallet</span>
-        <div class="balance-info">
-          <span class="balance-label">Balance</span>
-          <span class="balance-amount">{{ Number(wallet).toLocaleString() }}</span>
-        </div>
-        <span class="balance-unit">pts</span>
-      </div>
+      <!-- ══ MODE PROPRE ══════════════════════════════════════ -->
+      <template v-if="!isViewer">
 
-      <!-- ── Action Buttons ─────────────────────────────────── -->
-      <div class="action-btns">
-        <button class="abtn abtn-friends" @click="openFriends">
-          <span class="material-icons">group</span>
-          <span>Friends List</span>
-          <span class="material-icons abtn-arrow">chevron_right</span>
-        </button>
-        <button class="abtn abtn-email" @click="fetchAndShowEmail">
-          <span class="material-icons">mail</span>
-          <span>My Email</span>
-          <span v-if="emailLoading" class="email-spin"></span>
-          <span v-else class="material-icons abtn-arrow">chevron_right</span>
-        </button>
-      </div>
+        <!-- Balance -->
+        <div class="balance-card">
+          <span class="material-icons balance-icon">account_balance_wallet</span>
+          <div class="balance-info">
+            <span class="balance-label">Balance</span>
+            <span class="balance-amount">{{ Number(wallet).toLocaleString() }}</span>
+          </div>
+          <span class="balance-unit">pts</span>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-btns">
+          <button class="abtn abtn-friends" @click="openFriends">
+            <span class="material-icons">group</span>
+            <span>Friends List</span>
+            <span class="material-icons abtn-arrow">chevron_right</span>
+          </button>
+          <button class="abtn abtn-email" @click="fetchAndShowEmail">
+            <span class="material-icons">mail</span>
+            <span>My Email</span>
+            <span v-if="emailLoading" class="email-spin"></span>
+            <span v-else class="material-icons abtn-arrow">chevron_right</span>
+          </button>
+        </div>
+
+      </template>
+
+      <!-- ══ MODE VIEWER (profil olonkafa) ══════════════════════ -->
+      <template v-if="isViewer">
+
+        <div class="viewer-actions">
+
+          <!-- Challenge: raha online -->
+          <button
+            v-if="viewerOnline"
+            class="vbtn vbtn-challenge"
+            :class="{ 'btn-loading': viewerLoadingBtn === 'challenge' }"
+            :disabled="!!viewerLoadingBtn"
+            @click="emitChallenge"
+          >
+            <span v-if="viewerLoadingBtn === 'challenge'" class="vbtn-spin vbtn-spin-gold"></span>
+            <template v-else>
+              <span class="material-icons">sports_esports</span>
+              Challenge
+            </template>
+          </button>
+
+          <!-- Chat -->
+          <button class="vbtn vbtn-chat" disabled>
+            <span class="material-icons">chat_bubble</span>
+            Chat
+          </button>
+
+          <!-- Add: tsy amis, tsy pending -->
+          <button
+            v-if="!viewerData.isFriend && !viewerData.isPendingSent && !viewerData.isPendingReceived"
+            class="vbtn vbtn-add"
+            :class="{ 'btn-loading': viewerLoadingBtn === 'add' }"
+            :disabled="!!viewerLoadingBtn"
+            @click="emitSendRequest"
+          >
+            <span v-if="viewerLoadingBtn === 'add'" class="vbtn-spin vbtn-spin-green"></span>
+            <template v-else>
+              <span class="material-icons">person_add</span>
+              Add Friend
+            </template>
+          </button>
+
+          <!-- Accept + Decline: request received -->
+          <template v-else-if="viewerData.isPendingReceived">
+            <button
+              class="vbtn vbtn-accept"
+              :class="{ 'btn-loading': viewerLoadingBtn === 'accept' }"
+              :disabled="!!viewerLoadingBtn"
+              @click="emitAccept"
+            >
+              <span v-if="viewerLoadingBtn === 'accept'" class="vbtn-spin vbtn-spin-green"></span>
+              <template v-else>
+                <span class="material-icons">check_circle</span>
+                Accept
+              </template>
+            </button>
+            <button
+              class="vbtn vbtn-decline"
+              :disabled="!!viewerLoadingBtn"
+              @click="emitDecline"
+            >
+              <span class="material-icons">cancel</span>
+              Decline
+            </button>
+          </template>
+
+          <!-- Remove: efa amis -->
+          <button
+            v-else-if="viewerData.isFriend"
+            class="vbtn vbtn-remove"
+            :disabled="!!viewerLoadingBtn"
+            @click="emitRemove"
+          >
+            <span class="material-icons">person_remove</span>
+            Remove
+          </button>
+
+          <!-- Signalé -->
+          <button class="vbtn vbtn-report">
+            <span class="material-icons">flag</span>
+            Signalé
+          </button>
+
+        </div>
+
+      </template>
 
     </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════════════
-       AVATAR PICKER SUB-MODAL
+       AVATAR PICKER SUB-MODAL (mode propre uniquement)
   ══════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <Transition name="sub-fade">
@@ -126,43 +242,117 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
-  show:     { type: Boolean, default: false },
-  username: { type: String,  default: 'Player' },
-  userUid:  { type: String,  default: '000000000' },
-  wallet:   { type: [Number, String], default: 0 },
-  avatar:   { type: String,  default: '👨' },
+  show:        { type: Boolean, default: false },
+  // Mode propre
+  username:    { type: String,  default: 'Player' },
+  userUid:     { type: String,  default: '000000000' },
+  wallet:      { type: [Number, String], default: 0 },
+  avatar:      { type: String,  default: '👨' },
+  // Mode viewer: objet { firebaseUid, username, shortId, avatar, presence, isFriend, isPendingSent, isPendingReceived }
+  viewerData:  { type: Object,  default: null },
 })
 
-const emit = defineEmits(['close', 'open-social', 'avatar-updated'])
+const emit = defineEmits([
+  'close', 'open-social', 'avatar-updated',
+  // Viewer events
+  'accept-request', 'decline-request', 'send-request', 'remove-friend', 'challenge',
+])
 
-const localVisible    = ref(false)
-const closing         = ref(false)
-const currentAvatar   = ref(props.avatar)
+// ── Mode detection ─────────────────────────────────────────────
+const isViewer = computed(() => !!props.viewerData)
+
+const displayUsername = computed(() =>
+  isViewer.value ? (props.viewerData?.username || 'Player') : props.username
+)
+const displayUid = computed(() =>
+  isViewer.value ? (props.viewerData?.shortId || '—') : props.userUid
+)
+
+// ── Viewer: presence ───────────────────────────────────────────
+const viewerOnline = computed(() => isViewer.value && !!props.viewerData?.presence?.online)
+const viewerLastSeenText = computed(() => {
+  if (!isViewer.value) return ''
+  const ts = props.viewerData?.presence?.lastSeen
+  if (!ts) return 'Offline'
+  const diffMs  = Date.now() - ts
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'Just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24)  return `${diffHr} hr ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`
+})
+
+// ── Viewer loading ─────────────────────────────────────────────
+const viewerLoadingBtn = ref(null)
+
+const emitChallenge = async () => {
+  viewerLoadingBtn.value = 'challenge'
+  emit('challenge', props.viewerData.firebaseUid)
+  setTimeout(() => { viewerLoadingBtn.value = null }, 1500)
+}
+const emitSendRequest = async () => {
+  viewerLoadingBtn.value = 'add'
+  emit('send-request', props.viewerData.firebaseUid)
+  setTimeout(() => { viewerLoadingBtn.value = null }, 1500)
+}
+const emitAccept = async () => {
+  viewerLoadingBtn.value = 'accept'
+  emit('accept-request', props.viewerData.firebaseUid)
+  setTimeout(() => { viewerLoadingBtn.value = null }, 1500)
+}
+const emitDecline = () => emit('decline-request', props.viewerData.firebaseUid)
+const emitRemove  = () => emit('remove-friend',   props.viewerData.firebaseUid)
+
+// ── UID Copy ───────────────────────────────────────────────────
+const uidCopied = ref(false)
+let   uidCopyTimer = null
+
+const copyUid = async () => {
+  const val = displayUid.value
+  if (!val || val === '—') return
+  try {
+    await navigator.clipboard.writeText(val)
+  } catch {
+    // fallback
+    const el = document.createElement('textarea')
+    el.value = val; document.body.appendChild(el)
+    el.select(); document.execCommand('copy')
+    document.body.removeChild(el)
+  }
+  uidCopied.value = true
+  clearTimeout(uidCopyTimer)
+  uidCopyTimer = setTimeout(() => { uidCopied.value = false }, 3000)
+}
+
+// ── Own profile state ──────────────────────────────────────────
+const localVisible     = ref(false)
+const closing          = ref(false)
+const currentAvatar    = ref(props.avatar)
 const showAvatarPicker = ref(false)
-const avatarSaving    = ref(false)
-const showEmailModal  = ref(false)
-const userEmail       = ref('')
-const emailLoading    = ref(false)
+const avatarSaving     = ref(false)
+const showEmailModal   = ref(false)
+const userEmail        = ref('')
+const emailLoading     = ref(false)
 
 const AVATARS = [
-  // People
   '👨','👩','🧔','👱','🧑','👴','👵','👦','👧','🧕',
-  // Fantasy / Roles
   '🧙','🧝','🦸','🦹','🧑‍🚀','👮','🕵️','👷','🤴','👸',
-  // Animals
   '🦁','🐯','🐺','🦊','🐻','🐼','🐨','🦝','🐮','🐧',
-  // Fun / Wild
   '😎','🤩','😈','💀','👽','🤖','🃏','🎭','🔥','⚡',
 ]
 
 watch(() => props.show, (val) => {
   if (val) {
-    currentAvatar.value = props.avatar
-    localVisible.value  = true
-    closing.value       = false
+    currentAvatar.value    = props.avatar
+    uidCopied.value        = false
+    viewerLoadingBtn.value = null
+    localVisible.value     = true
+    closing.value          = false
     document.body.style.overflow = 'hidden'
   } else {
     closing.value = true
@@ -199,7 +389,7 @@ const selectAvatar = async (emoji) => {
       localStorage.setItem('user_avatar', emoji)
       emit('avatar-updated', emoji)
     }
-  } catch { /* keep previous on error */ }
+  } catch { }
   avatarSaving.value = false
 }
 
@@ -227,7 +417,7 @@ const fetchAndShowEmail = async () => {
   background: rgba(0, 0, 0, .6);
   backdrop-filter: blur(2px);
   display: flex; place-content: center; place-items: center;
-  z-index: 2000;
+  z-index: 2500;
 }
 .ovl.on  { display: flex; }
 .ovl.off { animation: kFade .4s forwards; }
@@ -273,16 +463,13 @@ const fetchAndShowEmail = async () => {
   text-shadow: 0 4px 12px rgba(0,0,0,.6); margin-bottom: 22px;
 }
 
-/* ══ PROFILE HEADER — flex row: avatar gauche + identity droite ═ */
+/* ══ PROFILE HEADER ════════════════════════════════════════════ */
 .profile-header {
   display: flex; align-items: center;
   gap: 18px; margin-bottom: 20px;
 }
 
-/* ── Avatar wrap (relative pour positionner le btn edit) ── */
-.avatar-wrap {
-  position: relative; flex-shrink: 0;
-}
+.avatar-wrap { position: relative; flex-shrink: 0; }
 
 .avatar-ring {
   position: relative;
@@ -293,9 +480,7 @@ const fetchAndShowEmail = async () => {
   display: flex; align-items: center; justify-content: center;
 }
 
-.avatar-emoji {
-  font-size: 46px; line-height: 1; user-select: none;
-}
+.avatar-emoji { font-size: 46px; line-height: 1; user-select: none; }
 
 .avatar-saving-spin {
   position: absolute; inset: -4px; border-radius: 50%;
@@ -303,7 +488,6 @@ const fetchAndShowEmail = async () => {
   animation: spin .7s linear infinite;
 }
 
-/* ── Bouton edit: icône seule, coin bas-droit du ring ── */
 .btn-edit-avatar {
   position: absolute; bottom: -3px; right: -3px;
   width: 26px; height: 26px; border-radius: 50%; border: none;
@@ -314,13 +498,22 @@ const fetchAndShowEmail = async () => {
   box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
 .btn-edit-avatar .material-icons { font-size: 14px; }
-.btn-edit-avatar:hover:not(:disabled) {
-  transform: scale(1.15);
-  box-shadow: 0 4px 14px rgba(255,200,60,.4);
-}
+.btn-edit-avatar:hover:not(:disabled) { transform: scale(1.15); box-shadow: 0 4px 14px rgba(255,200,60,.4); }
 .btn-edit-avatar:disabled { opacity: .5; cursor: not-allowed; }
 
-/* ── Identity (flex column, centré verticalement) ── */
+/* ── Viewer: statut badge sur avatar ── */
+.viewer-status {
+  position: absolute; bottom: -2px; right: -2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2.5px solid #071e3d;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 900;
+}
+.vstatus-on  { background: #1adb6a; color: #052010; }
+.vstatus-off { background: rgba(255,255,255,.15); color: rgba(255,245,200,.4); }
+.vstatus-dot { line-height: 1; }
+
+/* ── Identity ── */
 .identity-block {
   display: flex; flex-direction: column;
   justify-content: center; gap: 6px; min-width: 0;
@@ -332,15 +525,44 @@ const fetchAndShowEmail = async () => {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* ── UID row: badge + copy button ── */
+.p-uid-row {
+  display: flex; align-items: center; gap: 6px; align-self: flex-start;
+}
+
 .p-uid {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 3px 12px; border-radius: 20px; align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,220,100,.15);
   font-size: 12px; font-weight: 600; color: rgba(255,245,200,.5);
   letter-spacing: 1.5px;
 }
-.uid-icon { font-size: 13px; color: rgba(255,220,100,.4); }
+.uid-label {
+  font-size: 9px; font-weight: 800; color: rgba(255,220,100,.4);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.uid-val { color: rgba(255,245,200,.65); }
+
+.btn-copy-uid {
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .2s, transform .15s;
+  flex-shrink: 0;
+}
+.btn-copy-uid:hover:not(:disabled) { background: rgba(255,255,255,.14); transform: scale(1.1); }
+.btn-copy-uid:disabled { cursor: default; }
+.btn-copy-uid .copy-icon { font-size: 14px; color: rgba(255,245,200,.4); transition: color .25s; }
+.btn-copy-uid.copied .copy-icon { color: #2bef7a; }
+
+/* ── Viewer: presence text ── */
+.viewer-presence {
+  font-size: 11px; font-weight: 700; letter-spacing: .3px;
+}
+.vpres-on  { color: #3ddc84; }
+.vpres-off { color: rgba(255,245,200,.3); font-weight: 500; }
 
 /* ══ BALANCE CARD ══════════════════════════════════════════════ */
 .balance-card {
@@ -356,7 +578,7 @@ const fetchAndShowEmail = async () => {
 .balance-amount { font-size: 26px; font-weight: 900; color: #ffd966; line-height: 1.1; }
 .balance-unit   { font-size: 11px; font-weight: 700; color: rgba(255,217,102,.4); text-transform: uppercase; letter-spacing: 1px; align-self: flex-end; padding-bottom: 4px; }
 
-/* ══ ACTION BUTTONS ════════════════════════════════════════════ */
+/* ══ ACTION BUTTONS (mode propre) ══════════════════════════════ */
 .action-btns { display: flex; flex-direction: column; gap: 10px; }
 
 .abtn {
@@ -394,6 +616,78 @@ const fetchAndShowEmail = async () => {
   border: 2.5px solid rgba(57,185,255,.25); border-top-color: #39b9ff;
   animation: spin .65s linear infinite; flex-shrink: 0;
 }
+
+/* ══ VIEWER ACTIONS ════════════════════════════════════════════ */
+.viewer-actions {
+  display: flex; flex-direction: column; gap: 9px;
+  margin-top: 4px;
+}
+
+.vbtn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px; border-radius: 16px; border: none;
+  cursor: pointer; transition: .2s; font-size: 13.5px; font-weight: 700;
+  letter-spacing: .3px; width: 100%;
+  min-height: 46px;
+}
+.vbtn .material-icons { font-size: 19px; flex-shrink: 0; }
+.vbtn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+.vbtn:disabled { opacity: .45; cursor: not-allowed; transform: none !important; filter: none !important; }
+
+.vbtn-challenge {
+  background: linear-gradient(135deg, rgba(255,200,60,.18), rgba(200,140,10,.1));
+  border: 1px solid rgba(255,200,60,.35); color: #ffd966;
+  box-shadow: 0 4px 14px rgba(255,180,30,.12);
+}
+.vbtn-challenge .material-icons { color: #ffd966; }
+
+.vbtn-chat {
+  background: linear-gradient(135deg, rgba(57,185,255,.12), rgba(15,100,200,.07));
+  border: 1px solid rgba(57,185,255,.2); color: rgba(168,216,255,.55);
+}
+.vbtn-chat .material-icons { color: rgba(57,185,255,.5); }
+
+.vbtn-add {
+  background: linear-gradient(135deg, rgba(60,180,255,.16), rgba(15,80,200,.09));
+  border: 1px solid rgba(60,180,255,.3); color: #7dd4ff;
+}
+.vbtn-add .material-icons { color: #7dd4ff; }
+
+.vbtn-accept {
+  background: linear-gradient(135deg, rgba(43,239,122,.16), rgba(15,168,68,.09));
+  border: 1px solid rgba(43,239,122,.3); color: #6cfa8e;
+}
+.vbtn-accept .material-icons { color: #6cfa8e; }
+
+.vbtn-decline {
+  background: linear-gradient(135deg, rgba(220,80,80,.13), rgba(160,30,30,.07));
+  border: 1px solid rgba(220,80,80,.28); color: #ff8080;
+}
+.vbtn-decline .material-icons { color: #ff8080; }
+
+.vbtn-remove {
+  background: linear-gradient(135deg, rgba(220,50,50,.12), rgba(150,20,20,.07));
+  border: 1px solid rgba(220,50,50,.28); color: #ff6b6b;
+}
+.vbtn-remove .material-icons { color: #ff6b6b; }
+
+.vbtn-report {
+  background: rgba(255,140,0,.08);
+  border: 1px solid rgba(255,140,0,.2); color: rgba(255,180,60,.6);
+  margin-top: 2px;
+}
+.vbtn-report .material-icons { color: rgba(255,140,0,.5); }
+.vbtn-report:hover:not(:disabled) { background: rgba(255,140,0,.14); color: rgba(255,180,60,.85); transform: none; }
+
+/* ── Viewer spinners ── */
+@keyframes vSpin { to { transform: rotate(360deg); } }
+.vbtn-spin {
+  display: inline-block; width: 16px; height: 16px;
+  border-radius: 50%; border: 2.5px solid transparent;
+  animation: vSpin .6s linear infinite; flex-shrink: 0;
+}
+.vbtn-spin-gold  { border-color: rgba(255,217,102,.25); border-top-color: #ffd966; }
+.vbtn-spin-green { border-color: rgba(108,250,142,.25); border-top-color: #6cfa8e; }
 
 /* ══ SUB-MODAL BASE ════════════════════════════════════════════ */
 .sub-ovl {
@@ -453,7 +747,6 @@ const fetchAndShowEmail = async () => {
   background: rgba(57,185,255,.08); border: 1px solid rgba(57,185,255,.2); margin: 6px 0;
 }
 .email-text { font-size: 14px; font-weight: 700; color: #c8e8ff; word-break: break-all; }
-
 .email-note { font-size: 11.5px; color: rgba(255,245,200,.3); text-align: center; line-height: 1.5; padding: 0 8px; margin-bottom: 4px; }
 
 .btn-close-email {
