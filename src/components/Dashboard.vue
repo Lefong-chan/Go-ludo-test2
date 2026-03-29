@@ -72,13 +72,13 @@
 
   <footer id="footer">
     <div id="profile-info">
-      <div id="ava" role="img" aria-label="User Avatar">👨</div>
+      <div id="ava" role="img" aria-label="User Avatar">{{ avatar }}</div>
       <div>
         <div id="uname">{{ username }}</div>
         <div id="uid">ID: {{ userUid }}</div>
       </div>
     </div>
-    <div id="btn-stats" role="button" tabindex="0">
+    <div id="btn-stats" role="button" tabindex="0" @click="showProfile = true">
       <div style="display: flex; align-items: center; gap: 5px;">
         <span class="material-icons" style="font-size: 18px;">leaderboard</span>
         <span>Stats</span>
@@ -109,6 +109,17 @@
     @username-set="onUsernameSet"
   />
 
+  <ModalProfile
+    :show="showProfile"
+    :username="username"
+    :user-uid="userUid"
+    :wallet="wallet"
+    :avatar="avatar"
+    @close="showProfile = false"
+    @open-social="onProfileOpenSocial"
+    @avatar-updated="onAvatarUpdated"
+  />
+
 </template>
 
 <script setup>
@@ -127,6 +138,7 @@ import ModalSocial   from '../components/modals/ModalSocial.vue'
 import ModalSettings from '../components/modals/ModalSettings.vue'
 import ModalWallet   from '../components/modals/ModalWallet.vue'
 import ModalUsername from '../components/modals/ModalUsername.vue'
+import ModalProfile  from '../components/modals/ModalProfile.vue'
 
 // ── Firebase ──────────────────────────────────────────────────
 const firebaseConfig = {
@@ -147,37 +159,33 @@ const showSocial    = ref(false)
 const showSettings  = ref(false)
 const showWallet    = ref(false)
 const showUsername  = ref(false)
+const showProfile   = ref(false)
 
 const username        = ref('Player')
 const userUid         = ref('000000000')
 const wallet          = ref(0)
+const avatar          = ref('👨')
 const userFirebaseUid = ref('')
 
 let unsubscribe    = null
 let myPresenceRef  = null
 
-// ── Presence: mametraka Online + onDisconnect ─────────────────
-// Antsoina rehefa efa fantatra ny firebaseUid.
-// onDisconnect() no manapaka ho Offline rehefa tapaka ny WebSocket
-// (fiala tab, fikapoahan'ny internet, fialan-toeka, sns).
+// ── Presence ──────────────────────────────────────────────────
 const initMyPresence = async (uid) => {
   if (!uid) return
   myPresenceRef = dbRef(rtdb, `presence/${uid}`)
 
-  // onDisconnect ALOHA mba ho voaray tsara amin'ny RTDB
   await onDisconnect(myPresenceRef).set({
     online:   false,
     lastSeen: serverTimestamp(),
   })
 
-  // Mametraka Online
   await dbSet(myPresenceRef, {
     online:   true,
     lastSeen: serverTimestamp(),
   })
 }
 
-// Antsoina rehefa logout na onUnmounted
 const destroyMyPresence = async () => {
   if (!myPresenceRef) return
   try {
@@ -185,7 +193,7 @@ const destroyMyPresence = async () => {
       online:   false,
       lastSeen: serverTimestamp(),
     })
-  } catch { /* miala na misy olana */ }
+  } catch { }
   myPresenceRef = null
 }
 
@@ -194,14 +202,15 @@ onMounted(async () => {
   const savedUid         = localStorage.getItem('user_uid')
   const savedWallet      = localStorage.getItem('user_wallet')
   const savedFirebaseUid = localStorage.getItem('user_firebase_uid')
+  const savedAvatar      = localStorage.getItem('user_avatar')
 
   if (savedUid)         userUid.value         = savedUid
   if (savedWallet)      wallet.value          = savedWallet
   if (savedFirebaseUid) userFirebaseUid.value = savedFirebaseUid
+  if (savedAvatar)      avatar.value          = savedAvatar
 
   if (savedFirebaseUid) {
     await fetchAndCheckUsername(savedFirebaseUid)
-    // Presence: mametraka Online rehefa miditra
     initMyPresence(savedFirebaseUid)
   } else {
     showUsername.value = true
@@ -216,12 +225,9 @@ onUnmounted(() => {
   destroyMyPresence()
 })
 
-// sendBeacon backup rehefa miala ny tab — ny onDisconnect RTDB
-// no manapaka ho Offline avy hatrany, ity backup fotsiny
 const handleBeforeUnload = () => {
   const token = localStorage.getItem('user_token')
   if (!token || !myPresenceRef) return
-  // Ny onDisconnect no mikarakara — tsy mila manao fetch eto
 }
 
 // ── Firestore real-time listener ──────────────────────────────
@@ -237,6 +243,10 @@ const startFirestoreListener = (fbUid) => {
       if (data.wallet !== undefined) {
         wallet.value = data.wallet
         localStorage.setItem('user_wallet', data.wallet)
+      }
+      if (data.avatar) {
+        avatar.value = data.avatar
+        localStorage.setItem('user_avatar', data.avatar)
       }
     }
   })
@@ -276,6 +286,15 @@ const onUsernameSet = (newUsername) => {
 
 const onBadgeUpdate = (count) => {
   console.log('Badge inbox:', count)
+}
+
+const onProfileOpenSocial = () => {
+  showProfile.value = false
+  setTimeout(() => { showSocial.value = true }, 200)
+}
+
+const onAvatarUpdated = (newAvatar) => {
+  avatar.value = newAvatar
 }
 </script>
 
