@@ -84,6 +84,26 @@ module.exports = async (req, res) => {
       });
     }
 
+    // ════════════════════════════════════════════════════════════
+    // LOGOUT
+    // POST /api/auth?action=logout
+    // Headers: Authorization: Bearer <idToken>
+    // ════════════════════════════════════════════════════════════
+    if (action === 'logout') {
+      try {
+        const authHeader = req.headers.authorization || '';
+        const idToken    = authHeader.replace('Bearer ', '').trim();
+        if (idToken) {
+          const decoded = await admin.auth().verifyIdToken(idToken);
+          // Manafoana ny refresh tokens rehetra — tsy maintsy miditra indray ny mpampiasa
+          await admin.auth().revokeRefreshTokens(decoded.uid);
+        }
+      } catch {
+      }
+
+      return res.status(200).json({ message: 'Logged out' });
+    }
+
     return res.status(404).json({ message: 'Endpoint not found' });
 
   } catch (error) {
