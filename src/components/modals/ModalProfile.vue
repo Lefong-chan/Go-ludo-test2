@@ -15,25 +15,34 @@
 
       <h2 class="mtitle">PROFILE</h2>
 
-      <!-- ── Avatar ────────────────────────────────────────── -->
-      <div class="avatar-section">
-        <div class="avatar-ring">
-          <div class="avatar-emoji">{{ currentAvatar }}</div>
-          <div v-if="avatarSaving" class="avatar-saving-spin"></div>
-        </div>
-        <button class="btn-change-avatar" @click="showAvatarPicker = true" :disabled="avatarSaving">
-          <span class="material-icons">edit</span>
-          <span>Change Avatar</span>
-        </button>
-      </div>
+      <!-- ── Avatar + Identity (flex row) ──────────────────── -->
+      <div class="profile-header">
 
-      <!-- ── Name + UID ─────────────────────────────────────── -->
-      <div class="identity-block">
-        <div class="p-name">{{ username }}</div>
-        <div class="p-uid">
-          <span class="material-icons uid-icon">tag</span>
-          {{ userUid }}
+        <!-- Avatar avec bouton edit coin bas-droit -->
+        <div class="avatar-wrap">
+          <div class="avatar-ring">
+            <div class="avatar-emoji">{{ currentAvatar }}</div>
+            <div v-if="avatarSaving" class="avatar-saving-spin"></div>
+          </div>
+          <button
+            class="btn-edit-avatar"
+            @click="showAvatarPicker = true"
+            :disabled="avatarSaving"
+            title="Change avatar"
+          >
+            <span class="material-icons">edit</span>
+          </button>
         </div>
+
+        <!-- Username + UID flex amin'ilay avatar -->
+        <div class="identity-block">
+          <div class="p-name">{{ username }}</div>
+          <div class="p-uid">
+            <span class="material-icons uid-icon">tag</span>
+            {{ userUid }}
+          </div>
+        </div>
+
       </div>
 
       <!-- ── Balance ───────────────────────────────────────── -->
@@ -119,7 +128,6 @@
 <script setup>
 import { ref, watch } from 'vue'
 
-// ── Props & Emits ─────────────────────────────────────────────
 const props = defineProps({
   show:     { type: Boolean, default: false },
   username: { type: String,  default: 'Player' },
@@ -130,21 +138,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'open-social', 'avatar-updated'])
 
-// ── Local modal state ─────────────────────────────────────────
-const localVisible = ref(false)
-const closing      = ref(false)
-
-// ── Avatar ────────────────────────────────────────────────────
+const localVisible    = ref(false)
+const closing         = ref(false)
 const currentAvatar   = ref(props.avatar)
 const showAvatarPicker = ref(false)
 const avatarSaving    = ref(false)
+const showEmailModal  = ref(false)
+const userEmail       = ref('')
+const emailLoading    = ref(false)
 
-// ── Email ─────────────────────────────────────────────────────
-const showEmailModal = ref(false)
-const userEmail      = ref('')
-const emailLoading   = ref(false)
-
-// ── Avatar list (40 emojis, 4 categories) ─────────────────────
 const AVATARS = [
   // People
   '👨','👩','🧔','👱','🧑','👴','👵','👦','👧','🧕',
@@ -156,7 +158,6 @@ const AVATARS = [
   '😎','🤩','😈','💀','👽','🤖','🃏','🎭','🔥','⚡',
 ]
 
-// ── Watchers ──────────────────────────────────────────────────
 watch(() => props.show, (val) => {
   if (val) {
     currentAvatar.value = props.avatar
@@ -173,11 +174,8 @@ watch(() => props.show, (val) => {
   }
 })
 
-watch(() => props.avatar, (val) => {
-  currentAvatar.value = val
-})
+watch(() => props.avatar, (val) => { currentAvatar.value = val })
 
-// ── Handlers ──────────────────────────────────────────────────
 const handleClose = () => emit('close')
 
 const openFriends = () => {
@@ -185,39 +183,29 @@ const openFriends = () => {
   emit('close')
 }
 
-// Mifidy avatar → save ho any Firestore via API
 const selectAvatar = async (emoji) => {
   if (emoji === currentAvatar.value) { showAvatarPicker.value = false; return }
-
   showAvatarPicker.value = false
   avatarSaving.value     = true
-
   try {
     const token = localStorage.getItem('user_token')
     const res   = await fetch('/api/user?action=update-avatar', {
       method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ avatar: emoji }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ avatar: emoji }),
     })
-
     if (res.ok) {
       currentAvatar.value = emoji
       localStorage.setItem('user_avatar', emoji)
       emit('avatar-updated', emoji)
     }
-  } catch { /* keep previous avatar on error */ }
-
+  } catch { /* keep previous on error */ }
   avatarSaving.value = false
 }
 
-// Manangona email avy amin'ny API ary mampiseho ilay modal
 const fetchAndShowEmail = async () => {
   if (emailLoading.value) return
   if (userEmail.value) { showEmailModal.value = true; return }
-
   emailLoading.value = true
   try {
     const token = localStorage.getItem('user_token')
@@ -225,19 +213,15 @@ const fetchAndShowEmail = async () => {
       headers: { 'Authorization': `Bearer ${token}` },
     })
     const data = await res.json()
-    if (res.ok) userEmail.value = data.email || '—'
-    else        userEmail.value = '—'
-  } catch {
-    userEmail.value = '—'
-  }
-  emailLoading.value  = false
+    userEmail.value = res.ok ? (data.email || '—') : '—'
+  } catch { userEmail.value = '—' }
+  emailLoading.value   = false
   showEmailModal.value = true
 }
 </script>
 
 <style scoped>
 /* ══ BASE OVERLAY & MODAL ══════════════════════════════════════ */
-
 .ovl {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, .6);
@@ -249,10 +233,9 @@ const fetchAndShowEmail = async () => {
 .ovl.off { animation: kFade .4s forwards; }
 
 .mdl {
-  border-radius: 32px;
-  padding: 44px 24px 32px;
-  width: 88%; max-width: 360px;
-  position: relative; color: #fff9e0;
+  border-radius: 32px; padding: 44px 24px 32px;
+  width: 88%; max-width: 360px; position: relative;
+  color: #fff9e0;
   background: linear-gradient(160deg, #0f4a82 0%, #071e3d 100%);
   border: 2px solid rgba(255, 220, 100, 0.15);
   box-shadow: 0 24px 64px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06) inset;
@@ -285,107 +268,96 @@ const fetchAndShowEmail = async () => {
 
 /* ══ TITLE ═════════════════════════════════════════════════════ */
 .mtitle {
-  font-family: 'Chicle', cursive;
-  font-size: 36px; color: #fffacd;
-  text-align: center; letter-spacing: 3px;
-  text-shadow: 0 4px 12px rgba(0,0,0,.6);
-  margin-bottom: 20px;
+  font-family: 'Chicle', cursive; font-size: 36px;
+  color: #fffacd; text-align: center; letter-spacing: 3px;
+  text-shadow: 0 4px 12px rgba(0,0,0,.6); margin-bottom: 22px;
 }
 
-/* ══ AVATAR SECTION ════════════════════════════════════════════ */
-.avatar-section {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 12px;
-  margin-bottom: 20px;
+/* ══ PROFILE HEADER — flex row: avatar gauche + identity droite ═ */
+.profile-header {
+  display: flex; align-items: center;
+  gap: 18px; margin-bottom: 20px;
+}
+
+/* ── Avatar wrap (relative pour positionner le btn edit) ── */
+.avatar-wrap {
+  position: relative; flex-shrink: 0;
 }
 
 .avatar-ring {
   position: relative;
-  width: 96px; height: 96px;
-  border-radius: 50%;
+  width: 80px; height: 80px; border-radius: 50%;
   background: radial-gradient(circle, rgba(255,217,102,.18) 0%, rgba(10,30,60,.6) 100%);
   border: 3px solid rgba(255, 217, 102, .45);
-  box-shadow: 0 0 28px rgba(255, 200, 60, .2), 0 6px 20px rgba(0,0,0,.5);
+  box-shadow: 0 0 24px rgba(255,200,60,.18), 0 6px 18px rgba(0,0,0,.5);
   display: flex; align-items: center; justify-content: center;
 }
 
 .avatar-emoji {
-  font-size: 56px;
-  line-height: 1;
-  user-select: none;
+  font-size: 46px; line-height: 1; user-select: none;
 }
 
-/* Spinner overlay rehefa misy saving */
 .avatar-saving-spin {
-  position: absolute; inset: -4px;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  border-top-color: #ffd966;
+  position: absolute; inset: -4px; border-radius: 50%;
+  border: 3px solid transparent; border-top-color: #ffd966;
   animation: spin .7s linear infinite;
 }
 
-.btn-change-avatar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 18px; border-radius: 20px; border: none;
-  background: rgba(255, 217, 102, .12);
-  border: 1px solid rgba(255, 217, 102, .3);
-  color: #ffd966; font-size: 13px; font-weight: 700;
-  cursor: pointer; transition: .2s; letter-spacing: .5px;
+/* ── Bouton edit: icône seule, coin bas-droit du ring ── */
+.btn-edit-avatar {
+  position: absolute; bottom: -3px; right: -3px;
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: linear-gradient(135deg, #c9a83a, #ffd966);
+  color: #07192e;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: .2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
-.btn-change-avatar:hover:not(:disabled) {
-  background: rgba(255, 217, 102, .22);
-  box-shadow: 0 4px 14px rgba(255,200,60,.2);
-  transform: translateY(-1px);
+.btn-edit-avatar .material-icons { font-size: 14px; }
+.btn-edit-avatar:hover:not(:disabled) {
+  transform: scale(1.15);
+  box-shadow: 0 4px 14px rgba(255,200,60,.4);
 }
-.btn-change-avatar:disabled { opacity: .5; cursor: not-allowed; }
-.btn-change-avatar .material-icons { font-size: 15px; }
+.btn-edit-avatar:disabled { opacity: .5; cursor: not-allowed; }
 
-/* ══ IDENTITY ══════════════════════════════════════════════════ */
+/* ── Identity (flex column, centré verticalement) ── */
 .identity-block {
-  text-align: center; margin-bottom: 18px;
+  display: flex; flex-direction: column;
+  justify-content: center; gap: 6px; min-width: 0;
 }
 
 .p-name {
-  font-size: 24px; font-weight: 900; color: #fffbe6;
-  letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,.4);
+  font-size: 22px; font-weight: 900; color: #fffbe6;
+  letter-spacing: .5px; text-shadow: 0 2px 8px rgba(0,0,0,.4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .p-uid {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-top: 5px; padding: 4px 14px; border-radius: 20px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 12px; border-radius: 20px; align-self: flex-start;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,220,100,.15);
-  font-size: 13px; font-weight: 600; color: rgba(255,245,200,.5);
+  font-size: 12px; font-weight: 600; color: rgba(255,245,200,.5);
   letter-spacing: 1.5px;
 }
-.uid-icon { font-size: 14px; color: rgba(255,220,100,.4); }
+.uid-icon { font-size: 13px; color: rgba(255,220,100,.4); }
 
 /* ══ BALANCE CARD ══════════════════════════════════════════════ */
 .balance-card {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px; border-radius: 18px; margin-bottom: 18px;
   background: linear-gradient(135deg, rgba(255,200,50,.1), rgba(255,160,20,.06));
-  border: 1px solid rgba(255, 200, 80, .2);
+  border: 1px solid rgba(255,200,80,.2);
   box-shadow: 0 4px 16px rgba(0,0,0,.3);
 }
-
-.balance-icon { font-size: 26px; color: #ffd966; flex-shrink: 0; }
-
-.balance-info {
-  display: flex; flex-direction: column; flex: 1;
-}
+.balance-icon   { font-size: 26px; color: #ffd966; flex-shrink: 0; }
+.balance-info   { display: flex; flex-direction: column; flex: 1; }
 .balance-label  { font-size: 10px; font-weight: 700; color: rgba(255,245,200,.4); text-transform: uppercase; letter-spacing: 1.5px; }
 .balance-amount { font-size: 26px; font-weight: 900; color: #ffd966; line-height: 1.1; }
-
-.balance-unit {
-  font-size: 11px; font-weight: 700; color: rgba(255,217,102,.4);
-  text-transform: uppercase; letter-spacing: 1px; align-self: flex-end; padding-bottom: 4px;
-}
+.balance-unit   { font-size: 11px; font-weight: 700; color: rgba(255,217,102,.4); text-transform: uppercase; letter-spacing: 1px; align-self: flex-end; padding-bottom: 4px; }
 
 /* ══ ACTION BUTTONS ════════════════════════════════════════════ */
-.action-btns {
-  display: flex; flex-direction: column; gap: 10px;
-}
+.action-btns { display: flex; flex-direction: column; gap: 10px; }
 
 .abtn {
   display: flex; align-items: center; gap: 12px;
@@ -394,7 +366,7 @@ const fetchAndShowEmail = async () => {
   letter-spacing: .5px; text-align: left; width: 100%;
 }
 .abtn .material-icons:first-child { font-size: 20px; flex-shrink: 0; }
-.abtn span:nth-child(2) { flex: 1; }
+.abtn span:nth-child(2)            { flex: 1; }
 .abtn-arrow { font-size: 18px !important; opacity: .5; margin-left: auto; }
 
 .abtn-friends {
@@ -403,8 +375,7 @@ const fetchAndShowEmail = async () => {
 }
 .abtn-friends:hover {
   background: linear-gradient(135deg, rgba(43,239,122,.22), rgba(15,168,68,.16));
-  box-shadow: 0 6px 20px rgba(43,200,100,.2);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(43,200,100,.2); transform: translateY(-1px);
 }
 .abtn-friends .material-icons:first-child { color: #2bef7a; }
 
@@ -414,78 +385,52 @@ const fetchAndShowEmail = async () => {
 }
 .abtn-email:hover {
   background: linear-gradient(135deg, rgba(57,185,255,.22), rgba(15,100,200,.16));
-  box-shadow: 0 6px 20px rgba(57,150,255,.2);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(57,150,255,.2); transform: translateY(-1px);
 }
 .abtn-email .material-icons:first-child { color: #39b9ff; }
 
-/* spinner inline email */
 .email-spin {
   width: 16px; height: 16px; border-radius: 50%;
-  border: 2.5px solid rgba(57,185,255,.25);
-  border-top-color: #39b9ff;
-  animation: spin .65s linear infinite;
-  flex-shrink: 0;
+  border: 2.5px solid rgba(57,185,255,.25); border-top-color: #39b9ff;
+  animation: spin .65s linear infinite; flex-shrink: 0;
 }
 
 /* ══ SUB-MODAL BASE ════════════════════════════════════════════ */
 .sub-ovl {
   position: fixed; inset: 0; z-index: 9200;
   background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
 }
-
 .sub-box {
   position: relative;
   background: linear-gradient(160deg, #102d50 0%, #071828 100%);
-  border: 2px solid rgba(255,220,100,.15);
-  border-radius: 28px;
+  border: 2px solid rgba(255,220,100,.15); border-radius: 28px;
   padding: 40px 20px 28px;
   width: 100%; max-width: 340px;
   box-shadow: 0 24px 60px rgba(0,0,0,.8);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
 }
-
 .sub-box-sm { max-width: 300px; }
-
-.x-sub {
-  position: absolute; top: 14px; right: 14px;
-  width: 34px; height: 34px;
-}
+.x-sub { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; }
 
 .sub-title {
-  font-family: 'Chicle', cursive;
-  font-size: 22px; color: #fffacd;
-  text-align: center; letter-spacing: 2px;
-  text-shadow: 0 2px 8px rgba(0,0,0,.5);
-  margin-bottom: 4px;
+  font-family: 'Chicle', cursive; font-size: 22px;
+  color: #fffacd; text-align: center; letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.5); margin-bottom: 4px;
 }
 
 /* ══ AVATAR PICKER ═════════════════════════════════════════════ */
-.sub-hint {
-  font-size: 11px; color: rgba(255,245,200,.35);
-  text-transform: uppercase; letter-spacing: 1.5px;
-  margin-bottom: 6px;
-}
+.sub-hint { font-size: 11px; color: rgba(255,245,200,.35); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
 
-.emoji-grid {
-  display: grid; grid-template-columns: repeat(5, 1fr);
-  gap: 8px; width: 100%; margin-top: 4px;
-}
+.emoji-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: 100%; margin-top: 4px; }
 
 .emoji-btn {
-  font-size: 30px; line-height: 1;
-  width: 52px; height: 52px; border-radius: 14px; border: none;
-  background: rgba(255,255,255,.06);
+  font-size: 30px; line-height: 1; width: 52px; height: 52px;
+  border-radius: 14px; border: none; background: rgba(255,255,255,.06);
   cursor: pointer; transition: .18s;
   display: flex; align-items: center; justify-content: center;
 }
-.emoji-btn:hover {
-  background: rgba(255,217,102,.18);
-  transform: scale(1.15);
-  box-shadow: 0 4px 12px rgba(255,200,60,.2);
-}
+.emoji-btn:hover { background: rgba(255,217,102,.18); transform: scale(1.15); box-shadow: 0 4px 12px rgba(255,200,60,.2); }
 .emoji-active {
   background: rgba(255,217,102,.25) !important;
   border: 2px solid rgba(255,217,102,.6) !important;
@@ -498,34 +443,23 @@ const fetchAndShowEmail = async () => {
   width: 64px; height: 64px; border-radius: 50%;
   background: radial-gradient(circle, rgba(57,185,255,.18), rgba(10,30,60,.5));
   border: 2px solid rgba(57,185,255,.3);
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: 4px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
 }
 .email-big-icon { font-size: 32px; color: #39b9ff; }
 
 .email-display {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 18px; border-radius: 14px; width: 100%;
-  background: rgba(57,185,255,.08);
-  border: 1px solid rgba(57,185,255,.2);
-  margin: 6px 0;
+  background: rgba(57,185,255,.08); border: 1px solid rgba(57,185,255,.2); margin: 6px 0;
 }
-.email-text {
-  font-size: 14px; font-weight: 700; color: #c8e8ff;
-  word-break: break-all;
-}
+.email-text { font-size: 14px; font-weight: 700; color: #c8e8ff; word-break: break-all; }
 
-.email-note {
-  font-size: 11.5px; color: rgba(255,245,200,.3);
-  text-align: center; line-height: 1.5;
-  padding: 0 8px; margin-bottom: 4px;
-}
+.email-note { font-size: 11.5px; color: rgba(255,245,200,.3); text-align: center; line-height: 1.5; padding: 0 8px; margin-bottom: 4px; }
 
 .btn-close-email {
-  margin-top: 8px; padding: 10px 32px;
-  border-radius: 20px; border: 1px solid rgba(255,255,255,.15);
-  background: rgba(255,255,255,.07); color: rgba(255,245,200,.6);
-  font-size: 13px; font-weight: 700; cursor: pointer; transition: .2s;
+  margin-top: 8px; padding: 10px 32px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.07);
+  color: rgba(255,245,200,.6); font-size: 13px; font-weight: 700; cursor: pointer; transition: .2s;
 }
 .btn-close-email:hover { background: rgba(255,255,255,.14); color: #fff; }
 
@@ -533,19 +467,10 @@ const fetchAndShowEmail = async () => {
 .sub-fade-enter-active { transition: opacity .3s; }
 .sub-fade-leave-active { transition: opacity .25s; }
 .sub-fade-enter-from, .sub-fade-leave-to { opacity: 0; }
-
 .sub-fade-enter-active .sub-box { animation: subZoom .3s ease-out; }
 .sub-fade-leave-active .sub-box { animation: subOut  .25s ease-in forwards; }
 
-@keyframes subZoom {
-  from { opacity: 0; transform: scale(.6); }
-  to   { opacity: 1; transform: scale(1);  }
-}
-@keyframes subOut {
-  from { opacity: 1; transform: scale(1);  }
-  to   { opacity: 0; transform: scale(.6); }
-}
-
-/* ══ SHARED SPINNER ════════════════════════════════════════════ */
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes subZoom { from { opacity:0; transform:scale(.6); } to { opacity:1; transform:scale(1); } }
+@keyframes subOut  { from { opacity:1; transform:scale(1);  } to { opacity:0; transform:scale(.6); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
 </style>
