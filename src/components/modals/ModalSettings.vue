@@ -52,10 +52,23 @@
       </div>
     </div>
   </div>
+
+  <ModalConfirm
+    v-model="showConfirm"
+    title="Hivoaka ny kaonty ianao?"
+    message="Hadinoina ny session ary tsy maintsy hiditra indray ianao."
+    confirmLabel="MIVOAKA"
+    cancelLabel="FOANA"
+    icon="logout"
+    type="danger"
+    :loading="logoutLoading"
+    @confirm="doLogout"
+  />
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
+import ModalConfirm   from './ModalConfirm.vue'
 
 const props = defineProps({
   show: {
@@ -66,11 +79,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const localVisible = ref(false)
-const closing      = ref(false)
-const lang         = ref('English')
-const sfx          = ref(true)
-const vfx          = ref(true)
+const localVisible  = ref(false)
+const closing       = ref(false)
+const lang          = ref('English')
+const sfx           = ref(true)
+const vfx           = ref(true)
+
+// ── Sign Out state ────────────────────────────────────────────
+const showConfirm   = ref(false)
+const logoutLoading = ref(false)
 
 watch(() => props.show, (val) => {
   if (val) {
@@ -96,13 +113,28 @@ const toggleLang = () => {
 }
 
 const handleSignOut = () => {
-  // TODO: ajouter la logique de déconnexion ici
-  emit('close')
+  showConfirm.value = true
+}
+
+const doLogout = async () => {
+  logoutLoading.value = true
+
+  try {
+    const token = localStorage.getItem('user_token')
+    await fetch('/api/auth?action=logout', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+  } catch {
+  }
+
+  localStorage.clear()
+
+  window.location.replace('/')
 }
 </script>
 
 <style scoped>
-/* ─── 1. NY AVY AO AMIN'NY MODALS.CSS (Base Styles) ─── */
 
 .ovl {
   position: fixed;
@@ -152,23 +184,19 @@ const handleSignOut = () => {
   border: 2px solid rgba(255, 255, 200, .8); font-size: 28px; color: #fff;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: .2s;
-  border: none; /* Nampiana mba tsy hisy border default ny button */
+  border: none;
 }
 .x:hover { background: #e06a5a; transform: scale(1.15) rotate(90deg); border-color: #fff; }
 
-/* Title Styles */
 .mtitle {
   color: #fffacd;
   font-family: 'Chicle', cursive;
   text-align: center;
   letter-spacing: 2px;
-  text-shadow: 0 4px 8px rgba(0,0,0,0.5); /* Novaina kely ho hita tsara */
+  text-shadow: 0 4px 8px rgba(0,0,0,0.5);
   margin-bottom: 25px;
 }
 .mtitle-lg { font-size: 38px; }
-
-
-/* ─── 2. NY AVY AO AMIN'NY MODALSETTINGS.VUE (Specific Styles) ─── */
 
 .settings-list {
   margin-bottom: 8px;
