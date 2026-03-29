@@ -236,10 +236,15 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { initializeApp, getApps }            from 'firebase/app'
 import { getFirestore, collection, onSnapshot as fsOnSnapshot } from 'firebase/firestore'
-import { usePresence }                       from '@/composables/usePresence'
-import ModalError                            from './ModalError.vue'
+import {
+  getDatabase,
+  ref      as dbRef,
+  onValue,
+  off,
+} from 'firebase/database'
+import ModalError from './ModalError.vue'
 
-// ── Firebase (Firestore) ───────────────────────────────────────
+// ── Firebase ───────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -251,20 +256,11 @@ const firebaseConfig = {
 }
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 const fsDb        = getFirestore(firebaseApp)
-
-// ── Presence composable ────────────────────────────────────────
-const {
-  getPresence,
-  formatLastSeen,
-  subscribePresence,
-  unsubscribePresence,
-  stopAllPresenceListeners,
-} = usePresence()
+const rtdb        = getDatabase(firebaseApp)
 
 // ── API endpoints ──────────────────────────────────────────────
 const API_FRIENDS  = '/api/friends'
 const API_REQUESTS = '/api/requests'
-
 const FRIENDS_LIMIT = 100
 
 // ── Props / Emits ──────────────────────────────────────────────
@@ -284,15 +280,57 @@ const errorType = ref('error')
 
 const showError = (msg, type = 'error') => {
   errorMsg.value = ''
-  setTimeout(() => {
-    errorMsg.value  = msg
-    errorType.value = type
-  }, 50)
+  setTimeout(() => { errorMsg.value = msg; errorType.value = type }, 50)
 }
 
-// ── Friends data (Firestore realtime) ─────────────────────────
+// ── Friends data ───────────────────────────────────────────────
 const allFriends   = ref([])
 let   unsubFriends = null
+
+// ── Presence data (RTDB realtime) ─────────────────────────────
+// presenceMap: { [uid]: { online: bool, lastSeen: number|null } }
+const presenceMap    = ref({})
+const presenceUnsubs = {}
+
+const getPresence = (uid) =>
+  presenceMap.value[uid] ?? { online: false, lastSeen: null }
+
+const subscribePresence = (uid) => {
+  if (!uid || presenceUnsubs[uid]) return
+  const r = dbRef(rtdb, `presence/${uid}`)
+  const handler = (snap) => {
+    const val = snap.val()
+    presenceMap.value = {
+      ...presenceMap.value,
+      [uid]: val
+        ? { online: !!val.online, lastSeen: val.lastSeen ?? null }
+        : { online: false, lastSeen: null },
+    }
+  }
+  onValue(r, handler)
+  presenceUnsubs[uid] = () => off(r, 'value', handler)
+}
+
+const unsubscribePresence = (uid) => {
+  if (presenceUnsubs[uid]) { presenceUnsubs[uid](); delete presenceUnsubs[uid] }
+}
+
+const stopAllPresenceListeners = () => {
+  Object.keys(presenceUnsubs).forEach(unsubscribePresence)
+}
+
+// ── formatLastSeen ─────────────────────────────────────────────
+const formatLastSeen = (ts) => {
+  if (!ts) return 'Offline'
+  const diffMs  = Date.now() - ts
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'Just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24)  return `${diffHr} hr ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`
+}
 
 // ── Search state ───────────────────────────────────────────────
 const friendSearch          = ref('')
@@ -308,12 +346,8 @@ const commitFriendSearch = () => { committedFriendSearch.value = friendSearch.va
 const commitInboxSearch  = () => { committedInboxSearch.value  = inboxSearch.value.trim()  }
 
 // ── Computed ───────────────────────────────────────────────────
-const friends = computed(() =>
-  allFriends.value.filter(f => f.status === 'accepted')
-)
-const inbox = computed(() =>
-  allFriends.value.filter(f => f.status === 'pending_received')
-)
+const friends = computed(() => allFriends.value.filter(f => f.status === 'accepted'))
+const inbox   = computed(() => allFriends.value.filter(f => f.status === 'pending_received'))
 
 // Sorted: Online ambony, Offline ambany
 const sortedFriends = computed(() =>
@@ -326,16 +360,12 @@ const sortedFriends = computed(() =>
 
 const filteredFriends = computed(() => {
   const q = committedFriendSearch.value.toLowerCase()
-  return q
-    ? sortedFriends.value.filter(f => f.username.toLowerCase().includes(q))
-    : sortedFriends.value
+  return q ? sortedFriends.value.filter(f => f.username.toLowerCase().includes(q)) : sortedFriends.value
 })
 
 const filteredInbox = computed(() => {
   const q = committedInboxSearch.value.toLowerCase()
-  return q
-    ? inbox.value.filter(f => f.username.toLowerCase().includes(q))
-    : inbox.value
+  return q ? inbox.value.filter(f => f.username.toLowerCase().includes(q)) : inbox.value
 })
 
 const isFriend          = uid => allFriends.value.some(f => f.firebaseUid === uid && f.status === 'accepted')
@@ -358,7 +388,7 @@ const startFriendsListener = () => {
       newList.filter(f => f.status === 'accepted').map(f => f.firebaseUid)
     )
     acceptedUids.forEach(uid => subscribePresence(uid))
-    // Esorina listener ho an'ny tsy accepted intsony
+    // Esorina ilay tsy accepted intsony
     allFriends.value
       .filter(f => f.status === 'accepted' && !acceptedUids.has(f.firebaseUid))
       .forEach(f => unsubscribePresence(f.firebaseUid))
@@ -366,9 +396,7 @@ const startFriendsListener = () => {
     allFriends.value       = newList
     isLoadingFriends.value = false
     emit('update-badge', inbox.value.length)
-  }, () => {
-    isLoadingFriends.value = false
-  })
+  }, () => { isLoadingFriends.value = false })
 }
 
 const stopFriendsListener = () => {
@@ -380,11 +408,7 @@ const stopFriendsListener = () => {
 const doSearch = async () => {
   const q = playerSearch.value.trim()
   if (!q || isSearching.value) return
-
-  isSearching.value   = true
-  searchDone.value    = false
-  searchResults.value = []
-
+  isSearching.value = true; searchDone.value = false; searchResults.value = []
   try {
     const token = localStorage.getItem('user_token')
     const res   = await fetch(`${API_FRIENDS}?action=search-player&q=${encodeURIComponent(q)}`, {
@@ -393,57 +417,44 @@ const doSearch = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message)
     searchResults.value = data.results || []
-  } catch {
-    searchResults.value = []
-  } finally {
-    searchDone.value  = true
-    isSearching.value = false
-  }
+  } catch { searchResults.value = [] }
+  finally { searchDone.value = true; isSearching.value = false }
 }
 
 // ── API helper ─────────────────────────────────────────────────
 const getApiBase = (action) => {
-  const requestActions = ['send-request', 'accept-request', 'decline-request']
-  return requestActions.includes(action) ? API_REQUESTS : API_FRIENDS
+  return ['send-request','accept-request','decline-request'].includes(action)
+    ? API_REQUESTS : API_FRIENDS
 }
 
 const apiCall = async (btnKey, action, body) => {
   loadingBtn.value = btnKey
   try {
-    const token   = localStorage.getItem('user_token')
-    const apiBase = getApiBase(action)
-    const res     = await fetch(`${apiBase}?action=${action}`, {
-      method:  'POST',
+    const token = localStorage.getItem('user_token')
+    const res   = await fetch(`${getApiBase(action)}?action=${action}`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body:    JSON.stringify(body)
+      body: JSON.stringify(body)
     })
     const data = await res.json()
-    if (!res.ok) {
-      showError(data.message || 'An error occurred.')
-      return false
-    }
+    if (!res.ok) { showError(data.message || 'An error occurred.'); return false }
     return true
   } catch (e) {
-    showError(e.message || 'Network error. Please try again.')
-    return false
-  } finally {
-    loadingBtn.value = null
-  }
+    showError(e.message || 'Network error. Please try again.'); return false
+  } finally { loadingBtn.value = null }
 }
 
 // ── Actions ────────────────────────────────────────────────────
 const sendRequest = async (p) => {
   if (friends.value.length >= FRIENDS_LIMIT) {
-    showError(`You've reached your friend limit. Remove someone to add new friends.`)
-    return
+    showError(`You've reached your friend limit. Remove someone to add new friends.`); return
   }
   await apiCall('add-' + p.firebaseUid, 'send-request', { targetFirebaseUid: p.firebaseUid })
 }
 
 const acceptRequest = async (f) => {
   if (friends.value.length >= FRIENDS_LIMIT) {
-    showError(`You've reached your friend limit. Remove someone to accept new requests.`)
-    return
+    showError(`You've reached your friend limit. Remove someone to accept new requests.`); return
   }
   await apiCall('accept-' + f.firebaseUid, 'accept-request', { requesterFirebaseUid: f.firebaseUid })
 }
@@ -454,23 +465,17 @@ const challengeFriend = f => apiCall('challenge-' + f.firebaseUid, 'challenge', 
 // ── Watch ──────────────────────────────────────────────────────
 watch(() => props.show, val => {
   if (val) {
-    localVisible.value          = true
-    closing.value               = false
-    searchDone.value            = false
-    searchResults.value         = []
-    playerSearch.value          = ''
-    friendSearch.value          = ''
-    committedFriendSearch.value = ''
-    inboxSearch.value           = ''
-    committedInboxSearch.value  = ''
-    errorMsg.value              = ''
+    localVisible.value = true; closing.value = false
+    searchDone.value = false; searchResults.value = []
+    playerSearch.value = ''; friendSearch.value = ''
+    committedFriendSearch.value = ''; inboxSearch.value = ''
+    committedInboxSearch.value = ''; errorMsg.value = ''
     document.body.style.overflow = 'hidden'
     startFriendsListener()
   } else {
     closing.value = true
     setTimeout(() => {
-      localVisible.value = false
-      closing.value      = false
+      localVisible.value = false; closing.value = false
       document.body.style.overflow = 'auto'
       stopFriendsListener()
     }, 400)
@@ -483,21 +488,16 @@ const handleClose = () => emit('close')
 </script>
 
 <style scoped>
-/* ── Overlay ── */
 .ovl {
-  position:fixed; inset:0;
-  background:rgba(0,0,0,.6);
+  position:fixed; inset:0; background:rgba(0,0,0,.6);
   backdrop-filter:blur(1px);
-  display:flex; place-content:center; place-items:center;
-  z-index:2000;
+  display:flex; place-content:center; place-items:center; z-index:2000;
 }
 .ovl.on  { display:flex; }
 .ovl.off { animation:kFade .4s forwards; }
 
-/* ── Modal ── */
 .mdl {
-  border-radius:32px;
-  padding:40px 22px 28px;
+  border-radius:32px; padding:40px 22px 28px;
   width:90%; max-width:440px; height:560px;
   overflow:hidden; display:flex; flex-direction:column;
   position:relative; color:#fff9e0;
@@ -516,25 +516,21 @@ const handleClose = () => emit('close')
 
 #modal-social { --gd:#ffd966; --tg:#fff9e0; }
 
-/* ── Close ── */
 .x {
   position:absolute; top:16px; right:18px;
   width:38px; height:38px; border-radius:50%;
   background:rgba(220,80,70,.8); border:none;
-  font-size:20px; color:#fff; cursor:pointer;
+  color:#fff; cursor:pointer;
   display:flex; align-items:center; justify-content:center; transition:.2s;
 }
 .x:hover { background:#e06a5a; transform:scale(1.15) rotate(90deg); }
 
-/* ── Title ── */
 .mtitle { color:#fffacd; font-family:'Chicle',cursive; text-align:center; letter-spacing:2px; text-shadow:0 4px 8px rgba(0,0,0,.5); }
 .mtitle-sm { font-size:28px; margin-bottom:14px; }
 
-/* ── Tabs ── */
 .ftabs {
-  display:flex; gap:4px;
-  background:rgba(0,0,0,.25); border-radius:20px;
-  padding:4px; margin-bottom:12px; flex-shrink:0;
+  display:flex; gap:4px; background:rgba(0,0,0,.25);
+  border-radius:20px; padding:4px; margin-bottom:12px; flex-shrink:0;
 }
 .ft {
   flex:1; padding:9px 4px; border:none; background:none; border-radius:16px;
@@ -552,11 +548,9 @@ const handleClose = () => emit('close')
   border:1.5px solid #08264a;
 }
 
-/* ── Panels ── */
 .fp { display:none; flex-direction:column; flex:1; overflow:hidden; }
 .fp.on { display:flex; }
 
-/* ── Search bar ── */
 .fsrch {
   display:flex; align-items:center;
   background:rgba(10,30,18,.6); border:1px solid rgba(255,240,160,.3);
@@ -569,7 +563,6 @@ const handleClose = () => emit('close')
 }
 .fsrch input::placeholder { color:rgba(255,245,200,.3); }
 
-/* ── Search button ── */
 .srch-btn {
   width:32px; height:32px; min-width:32px; border-radius:50%; border:none;
   background:rgba(255,220,100,.18); color:var(--gd);
@@ -580,7 +573,6 @@ const handleClose = () => emit('close')
 .srch-btn:hover:not(:disabled) { background:rgba(255,220,100,.32); }
 .srch-btn:disabled { cursor:default; opacity:.55; }
 
-/* ── List ── */
 .flist {
   display:flex; flex-direction:column;
   gap:7px; overflow-y:auto; flex:1; padding-right:4px;
@@ -588,7 +580,6 @@ const handleClose = () => emit('close')
 .flist::-webkit-scrollbar { width:4px; }
 .flist::-webkit-scrollbar-thumb { background:rgba(255,220,100,.2); border-radius:4px; }
 
-/* ── Item ── */
 .fi {
   display:flex; align-items:center; justify-content:space-between;
   padding:9px 11px;
@@ -598,7 +589,6 @@ const handleClose = () => emit('close')
 .fi-l { display:flex; align-items:center; gap:10px; min-width:0; }
 .fi-l > div:last-child { display:flex; flex-direction:column; min-width:0; }
 
-/* ── Avatar ── */
 .fava {
   width:38px; height:38px; flex-shrink:0;
   background:rgba(30,74,130,.8); border:2px solid rgba(255,240,160,.2);
@@ -607,11 +597,7 @@ const handleClose = () => emit('close')
 }
 .fava .material-icons { font-size:20px; }
 
-/* ── Presence text ── */
-.fpres {
-  font-size:10px; font-weight:700; margin-top:2px;
-  letter-spacing:.3px;
-}
+.fpres { font-size:10px; font-weight:700; margin-top:2px; letter-spacing:.3px; }
 .fpres-on  { color:#3ddc84; }
 .fpres-off { color:rgba(255,245,200,.3); font-weight:500; }
 
@@ -619,18 +605,13 @@ const handleClose = () => emit('close')
 .fuid { font-size:10px; color:rgba(255,245,200,.3); margin-top:1px; }
 .fsub { font-size:11px; color:rgba(255,245,200,.4); margin-top:2px; }
 
-/* ── Action ── */
 .fa { display:flex; gap:5px; flex-shrink:0; }
 
-/* ── Buttons ── */
 .fb {
-  border:none; border-radius:20px;
-  font-size:11px; font-weight:700;
+  border:none; border-radius:20px; font-size:11px; font-weight:700;
   padding:0 11px; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
-  transition:filter .2s, transform .15s;
-  box-sizing:border-box;
-  height:30px;
+  transition:filter .2s, transform .15s; box-sizing:border-box; height:30px;
 }
 .fb-i { background:rgba(255,200,80,.15); border:1px solid rgba(255,200,80,.4); color:var(--gd); }
 .fb-a { background:rgba(100,220,120,.2);  border:1px solid rgba(100,220,120,.5); color:#6cfa8e; }
@@ -639,7 +620,6 @@ const handleClose = () => emit('close')
 .fb:hover:not(:disabled) { filter:brightness(1.15); transform:scale(1.04); }
 .fb:disabled { opacity:.55; cursor:not-allowed; }
 
-/* ── Spinners ── */
 @keyframes btnSpin { to { transform:rotate(360deg); } }
 .btn-spin {
   display:inline-block; width:13px; height:13px;
@@ -650,12 +630,10 @@ const handleClose = () => emit('close')
 .btn-spin-red   { border-color:rgba(255,128,128,.25); border-top-color:#ff8080; }
 .btn-spin-gold  { border-color:rgba(255,217,102,.25); border-top-color:var(--gd); }
 
-/* ── Empty ── */
 .empty {
   flex:1; display:flex; flex-direction:column;
   align-items:center; justify-content:center;
-  text-align:center; padding:20px;
-  color:rgba(255,245,200,.3);
+  text-align:center; padding:20px; color:rgba(255,245,200,.3);
 }
 .empty .material-icons { font-size:36px; margin-bottom:8px; opacity:.45; }
 .empty p { font-size:12.5px; line-height:1.5; }
