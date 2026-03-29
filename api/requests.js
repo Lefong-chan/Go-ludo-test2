@@ -89,6 +89,8 @@ module.exports = async (req, res) => {
             status:    'pending_sent',
             username:  targetData.username,
             shortId:   targetData.shortId,
+            // Avatar de la cible — affiché du côté de l'expéditeur
+            avatar:    targetData.avatar || '👤',
             updatedAt: now,
           }),
         db.collection('users').doc(targetFirebaseUid)
@@ -96,6 +98,8 @@ module.exports = async (req, res) => {
             status:    'pending_received',
             username:  myData.username,
             shortId:   myData.shortId,
+            // Avatar de l'expéditeur — affiché du côté de la cible
+            avatar:    myData.avatar || '👤',
             updatedAt: now,
           }),
       ]);
@@ -168,7 +172,7 @@ module.exports = async (req, res) => {
     }
 
     // ════════════════════════════════════════════════════════════
-    // CANCEL REQUEST (manafoana ny pending_sent nataon'ilay mpanao)
+    // CANCEL REQUEST
     // POST /api/requests?action=cancel-request
     // Headers: Authorization: Bearer <idToken>
     // body: { targetFirebaseUid }
