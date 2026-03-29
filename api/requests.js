@@ -167,6 +167,28 @@ module.exports = async (req, res) => {
       return res.status(200).json({ message: 'Friend request declined.' });
     }
 
+    // ════════════════════════════════════════════════════════════
+    // CANCEL REQUEST (manafoana ny pending_sent nataon'ilay mpanao)
+    // POST /api/requests?action=cancel-request
+    // Headers: Authorization: Bearer <idToken>
+    // body: { targetFirebaseUid }
+    // ════════════════════════════════════════════════════════════
+    if (action === 'cancel-request') {
+      const myUid = await verifyToken(req);
+      const { targetFirebaseUid } = req.body;
+
+      if (!targetFirebaseUid) return res.status(400).json({ message: 'targetFirebaseUid required' });
+
+      await Promise.all([
+        db.collection('users').doc(myUid)
+          .collection('friends').doc(targetFirebaseUid).delete(),
+        db.collection('users').doc(targetFirebaseUid)
+          .collection('friends').doc(myUid).delete(),
+      ]);
+
+      return res.status(200).json({ message: 'Friend request cancelled.' });
+    }
+
     return res.status(404).json({ message: 'Endpoint not found' });
 
   } catch (error) {
