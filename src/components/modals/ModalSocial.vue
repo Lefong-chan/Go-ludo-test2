@@ -59,7 +59,7 @@
             @click.stop="togglePopup(f, 'friends', $event)"
           >
             <div class="fi-l">
-              <div class="fava"><span class="material-icons">person</span></div>
+              <div class="fava fava-emoji">{{ f.avatar || '👤' }}</div>
               <div>
                 <div class="fn">{{ f.username }}</div>
                 <div class="fpres" :class="getPresence(f.firebaseUid).online ? 'fpres-on' : 'fpres-off'">
@@ -118,7 +118,7 @@
             @click.stop="togglePopup(f, 'inbox', $event)"
           >
             <div class="fi-l">
-              <div class="fava"><span class="material-icons">person</span></div>
+              <div class="fava fava-emoji">{{ f.avatar || '👤' }}</div>
               <div>
                 <div class="fn">{{ f.username }}</div>
                 <div class="fpres" :class="getPresence(f.firebaseUid).online ? 'fpres-on' : 'fpres-off'">
@@ -180,7 +180,7 @@
             @click.stop="togglePopup(p, 'search', $event)"
           >
             <div class="fi-l">
-              <div class="fava"><span class="material-icons">person</span></div>
+              <div class="fava fava-emoji">{{ p.avatar || '👤' }}</div>
               <div>
                 <div class="fn">{{ p.username }}</div>
                 <div class="fuid">ID: {{ p.shortId }}</div>
@@ -853,6 +853,7 @@ const handleClose = () => emit('close')
   color:rgba(255,220,100,.65);
 }
 .fava .material-icons { font-size:20px; }
+.fava-emoji { font-size:22px; line-height:1; background:rgba(10,25,55,.7); }
 
 .fpres { font-size:10px; font-weight:700; margin-top:2px; letter-spacing:.3px; }
 .fpres-on  { color:#3ddc84; }
@@ -980,5 +981,4 @@ const handleClose = () => emit('close')
 }
 .pop-remove:hover:not(:disabled) { background: rgba(220,50,50,.22); }
 
-/* Transition popup — ao ambony (eo ambanin'ny .popup-card) */
 </style>
