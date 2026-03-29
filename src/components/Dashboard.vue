@@ -86,7 +86,7 @@
     </div>
   </footer>
 
-  <!-- ── Modals ──────────────────────────────────────────────── -->
+  <!-- ── Modals ──────────────────────────────────────────────────── -->
   <ModalSocial
     :show="showSocial"
     @close="showSocial = false"
@@ -125,7 +125,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { initializeApp, getApps }      from 'firebase/app'
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, onSnapshot } from 'firebase/firestore'
 import {
   getDatabase,
   ref      as dbRef,
@@ -210,7 +210,8 @@ onMounted(async () => {
   if (savedAvatar)      avatar.value          = savedAvatar
 
   if (savedFirebaseUid) {
-    await fetchAndCheckUsername(savedFirebaseUid)
+    // Jerena mivantana ao Firestore ny username — tsy miankina amin'ny token
+    await fetchUsernameFromFirestore(savedFirebaseUid)
     initMyPresence(savedFirebaseUid)
   } else {
     showUsername.value = true
@@ -230,6 +231,58 @@ const handleBeforeUnload = () => {
   if (!token || !myPresenceRef) return
 }
 
+// ── Firestore: getDoc mivantana (tsy miankina amin'ny token) ──
+const fetchUsernameFromFirestore = async (fbUid) => {
+  try {
+    const userRef  = doc(fsDb, 'users', fbUid)
+    const snap     = await getDoc(userRef)
+
+    if (snap.exists()) {
+      const data = snap.data()
+
+      // Mameno ny state amin'ny data avy ao Firestore
+      if (data.wallet !== undefined) {
+        wallet.value = data.wallet
+        localStorage.setItem('user_wallet', data.wallet)
+      }
+      if (data.avatar) {
+        avatar.value = data.avatar
+        localStorage.setItem('user_avatar', data.avatar)
+      }
+
+      const hasUsername = data.username &&
+                          data.username !== 'New Player' &&
+                          data.username.trim() !== ''
+
+      if (hasUsername) {
+        // ✅ Misy username → tsy mampiseho modal, manomboka listener
+        username.value = data.username
+        startFirestoreListener(fbUid)
+      } else {
+        // ❌ Tsy misy username → mampiseho modal
+        showUsername.value = true
+        startFirestoreListener(fbUid)
+      }
+    } else {
+      // Tsy misy document → compte vaovao, mila username
+      showUsername.value = true
+    }
+  } catch {
+    // Raha fail ny Firestore (offline, etc.) → jerena ny localStorage
+    const savedUsername = localStorage.getItem('user_username')
+    const hasUsername   = savedUsername &&
+                          savedUsername !== 'New Player' &&
+                          savedUsername.trim() !== ''
+
+    if (hasUsername) {
+      username.value = savedUsername
+      startFirestoreListener(fbUid)
+    } else {
+      showUsername.value = true
+    }
+  }
+}
+
 // ── Firestore real-time listener ──────────────────────────────
 const startFirestoreListener = (fbUid) => {
   if (!fbUid || unsubscribe) return
@@ -239,6 +292,9 @@ const startFirestoreListener = (fbUid) => {
       const data = snap.data()
       if (data.username && data.username !== 'New Player' && data.username !== '') {
         username.value = data.username
+        localStorage.setItem('user_username', data.username)
+        // Raha voaroaka ny modal username (efa napetraka ny username) → afatsy
+        if (showUsername.value) showUsername.value = false
       }
       if (data.wallet !== undefined) {
         wallet.value = data.wallet
@@ -252,35 +308,10 @@ const startFirestoreListener = (fbUid) => {
   })
 }
 
-// ── Check session ─────────────────────────────────────────────
-const fetchAndCheckUsername = async (fbUid) => {
-  try {
-    const token = localStorage.getItem('user_token')
-    if (!token) { showUsername.value = true; return }
-
-    const res  = await fetch('/api/session?action=check-session', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    const data = await res.json()
-
-    if (res.ok) {
-      if (data.username && data.username !== 'New Player' && data.username !== '') {
-        username.value = data.username
-      } else {
-        showUsername.value = true
-      }
-      startFirestoreListener(fbUid)
-    } else {
-      showUsername.value = true
-    }
-  } catch {
-    showUsername.value = true
-  }
-}
-
 // ── Callbacks ─────────────────────────────────────────────────
 const onUsernameSet = (newUsername) => {
   username.value     = newUsername
+  localStorage.setItem('user_username', newUsername)
   showUsername.value = false
 }
 
