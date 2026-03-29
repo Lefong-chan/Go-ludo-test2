@@ -250,8 +250,7 @@ const props = defineProps({
   username:    { type: String,  default: 'Player' },
   userUid:     { type: String,  default: '000000000' },
   wallet:      { type: [Number, String], default: 0 },
-  avatar:      { type: String,  default: '👨' },
-  // Mode viewer: objet { firebaseUid, username, shortId, avatar, presence, isFriend, isPendingSent, isPendingReceived }
+  avatar:      { type: String,  default: '👤' },
   viewerData:  { type: Object,  default: null },
 })
 
