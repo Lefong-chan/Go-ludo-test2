@@ -91,6 +91,38 @@ module.exports = async (req, res) => {
       return res.status(200).json({ message: 'Username set successfully.', username: finalUsername });
     }
 
+    // ════════════════════════════════════════════════════════════
+    // UPDATE AVATAR
+    // POST /api/user?action=update-avatar
+    // Headers: Authorization: Bearer <idToken>
+    // body: { avatar }   (single emoji string)
+    // ════════════════════════════════════════════════════════════
+    if (action === 'update-avatar') {
+      const uid = await verifyToken(req);
+
+      const { avatar } = req.body;
+      if (!avatar) return res.status(400).json({ message: 'Avatar required' });
+
+      await db.collection('users').doc(uid).update({
+        avatar,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return res.status(200).json({ message: 'Avatar updated.', avatar });
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // GET EMAIL
+    // GET /api/user?action=get-email
+    // Headers: Authorization: Bearer <idToken>
+    // ════════════════════════════════════════════════════════════
+    if (action === 'get-email') {
+      const uid        = await verifyToken(req);
+      const userRecord = await admin.auth().getUser(uid);
+
+      return res.status(200).json({ email: userRecord.email || '' });
+    }
+
     return res.status(404).json({ message: 'Endpoint not found' });
 
   } catch (error) {
