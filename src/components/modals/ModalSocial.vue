@@ -69,7 +69,6 @@
               </div>
             </div>
             <div class="fa">
-              <!-- Button principale: Challenge si online, View Profile si offline -->
               <button
                 v-if="getPresence(f.firebaseUid).online"
                 class="fb fb-i"
@@ -81,7 +80,7 @@
                 <span v-if="loadingBtn === 'challenge-' + f.firebaseUid" class="btn-spin btn-spin-gold"></span>
                 <span v-else>Challenge</span>
               </button>
-              <button v-else class="fb fb-c" style="min-width:84px;" disabled>
+              <button v-else class="fb fb-i" style="min-width:84px;" @click.stop="openPlayerProfile(f)">
                 View Profile
               </button>
             </div>
@@ -220,8 +219,7 @@
       </div>
 
       <!-- ══════════════════════════════
-           POPUP CADRE KELY — ao anatin'ny .mdl mivantana (tsy ao anatin'ny .flist)
-           mba tsy ho clipped amin'ny overflow:auto an'ny .flist
+           POPUP CADRE KELY
            ══════════════════════════════ -->
       <Transition name="pop-anim">
         <div
@@ -232,7 +230,7 @@
         >
           <!-- ── BUDDIES popup ── -->
           <template v-if="popup.tab === 'friends'">
-            <button class="pop-btn pop-profile" disabled>
+            <button class="pop-btn pop-profile" @click="openPlayerProfile(popup.user); closePopup()">
               <span class="material-icons">account_circle</span>
               View Profile
             </button>
@@ -253,11 +251,15 @@
               <span class="material-icons">person_remove</span>
               Remove
             </button>
+            <button class="pop-btn pop-report" @click="closePopup()">
+              <span class="material-icons">flag</span>
+              Signalé
+            </button>
           </template>
 
           <!-- ── REQUESTS popup ── -->
           <template v-else-if="popup.tab === 'inbox'">
-            <button class="pop-btn pop-profile" disabled>
+            <button class="pop-btn pop-profile" @click="openPlayerProfile(popup.user); closePopup()">
               <span class="material-icons">account_circle</span>
               View Profile
             </button>
@@ -290,11 +292,15 @@
               <span class="material-icons">cancel</span>
               Decline
             </button>
+            <button class="pop-btn pop-report" @click="closePopup()">
+              <span class="material-icons">flag</span>
+              Signalé
+            </button>
           </template>
 
           <!-- ── FIND PLAYER popup ── -->
           <template v-else-if="popup.tab === 'search'">
-            <button class="pop-btn pop-profile" disabled>
+            <button class="pop-btn pop-profile" @click="openPlayerProfile(popup.user); closePopup()">
               <span class="material-icons">account_circle</span>
               View Profile
             </button>
@@ -350,6 +356,10 @@
                 Accept
               </template>
             </button>
+            <button class="pop-btn pop-report" @click="closePopup()">
+              <span class="material-icons">flag</span>
+              Signalé
+            </button>
           </template>
         </div>
       </Transition>
@@ -390,6 +400,18 @@
     :loading="confirmDecline.loading"
     @confirm="doDeclineRequest"
   />
+
+  <!-- ── ModalProfile: profil olonkafa ── -->
+  <ModalProfile
+    :show="playerProfileVisible"
+    :viewer-data="playerProfileData"
+    @close="playerProfileVisible = false"
+    @accept-request="onProfileAccept"
+    @decline-request="onProfileDecline"
+    @send-request="onProfileSendRequest"
+    @remove-friend="onProfileRemove"
+    @challenge="onProfileChallenge"
+  />
 </template>
 
 <script setup>
@@ -399,6 +421,7 @@ import { getFirestore, collection, onSnapshot as fsOnSnapshot } from 'firebase/f
 import { getDatabase, ref as dbRef, onValue, off } from 'firebase/database'
 import ModalError   from './ModalError.vue'
 import ModalConfirm from './ModalConfirm.vue'
+import ModalProfile from './ModalProfile.vue'
 
 // ── Firebase ───────────────────────────────────────────────────
 const firebaseConfig = {
@@ -478,19 +501,74 @@ const doDeclineRequest = async () => {
   }
 }
 
+// ── Player Profile viewer ──────────────────────────────────────
+const playerProfileVisible = ref(false)
+const playerProfileData    = ref(null)
+
+const openPlayerProfile = (user) => {
+  if (!user) return
+  playerProfileData.value = {
+    firebaseUid: user.firebaseUid,
+    username:    user.username,
+    shortId:     user.shortId,
+    avatar:      user.avatar || '👤',
+    presence:    getPresence(user.firebaseUid),
+    isFriend:    isFriend(user.firebaseUid),
+    isPendingSent:     isPendingSent(user.firebaseUid),
+    isPendingReceived: isPendingReceived(user.firebaseUid),
+  }
+  playerProfileVisible.value = true
+}
+
+// Callbacks avy amin'ny ModalProfile viewer
+const onProfileAccept = async (firebaseUid) => {
+  const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
+    || searchResults.value.find(p => p.firebaseUid === firebaseUid)
+  if (user) await acceptRequest(user)
+  // Hanavaozina ny data ao amin'ny playerProfileData
+  if (playerProfileData.value?.firebaseUid === firebaseUid) {
+    playerProfileData.value = {
+      ...playerProfileData.value,
+      isFriend: isFriend(firebaseUid),
+      isPendingSent: isPendingSent(firebaseUid),
+      isPendingReceived: isPendingReceived(firebaseUid),
+    }
+  }
+}
+const onProfileDecline = async (firebaseUid) => {
+  const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
+    || searchResults.value.find(p => p.firebaseUid === firebaseUid)
+  if (user) await declineRequest(user)
+  playerProfileVisible.value = false
+}
+const onProfileSendRequest = async (firebaseUid) => {
+  const user = searchResults.value.find(p => p.firebaseUid === firebaseUid)
+    || allFriends.value.find(f => f.firebaseUid === firebaseUid)
+  if (user) await sendRequest(user)
+}
+const onProfileRemove = (firebaseUid) => {
+  const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
+  if (user) {
+    playerProfileVisible.value = false
+    askRemove(user)
+  }
+}
+const onProfileChallenge = async (firebaseUid) => {
+  const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
+    || searchResults.value.find(p => p.firebaseUid === firebaseUid)
+  if (user) await challengeFriend(user)
+}
+
 // ── Popup cadre kely ───────────────────────────────────────────
-// Apetraka ao anatin'ny .mdl (position:relative) mba tsy ho clipped
-// amin'ny overflow:auto an'ny .flist
 const popup = reactive({
   visible: false,
   uid:     '',
   tab:     '',
   user:    null,
-  top:     0,   // px avy amin'ny top an'ilay .mdl
-  right:   0,   // px avy amin'ny right an'ilay .mdl
+  top:     0,
+  right:   0,
 })
 
-// Refs
 const mdlRef      = ref(null)
 const listFriends = ref(null)
 const listInbox   = ref(null)
@@ -502,8 +580,8 @@ const getListRef = () => {
   return listSearch.value
 }
 
-const POPUP_WIDTH = 180 // px
-const POPUP_RIGHT_GAP = 14 // px elanelana avy amin'ny sisiny havanana an'ny .mdl
+const POPUP_WIDTH    = 180
+const POPUP_RIGHT_GAP = 14
 
 const popupStyle = computed(() => ({
   top:   popup.top  + 'px',
@@ -527,15 +605,12 @@ const togglePopup = async (user, tab, event) => {
   const mdlEl = mdlRef.value
   if (mdlEl) {
     const mdlRect = mdlEl.getBoundingClientRect()
-    // Mitady ilay .fa button (action buttons eo ankavanana)
-    const rowEl  = event.currentTarget
-    const faEl   = rowEl.querySelector('.fa')
-    const refEl  = faEl || rowEl
+    const rowEl   = event.currentTarget
+    const faEl    = rowEl.querySelector('.fa')
+    const refEl   = faEl || rowEl
     const refRect = refEl.getBoundingClientRect()
 
-    // top: eo ambanin'ilay button, + elanelana 6px
     popup.top   = (refRect.bottom - mdlRect.top) + 6
-    // right: elanelana kely avy amin'ny sisiny havanana an'ny .mdl
     popup.right = POPUP_RIGHT_GAP
   }
 
@@ -567,6 +642,13 @@ const subscribePresence = (uid) => {
     presenceMap.value = {
       ...presenceMap.value,
       [uid]: val ? { online: !!val.online, lastSeen: val.lastSeen ?? null } : { online: false, lastSeen: null },
+    }
+    // Hanavaozina ny playerProfileData raha ilay olona no sokafana
+    if (playerProfileData.value?.firebaseUid === uid) {
+      playerProfileData.value = {
+        ...playerProfileData.value,
+        presence: val ? { online: !!val.online, lastSeen: val.lastSeen ?? null } : { online: false, lastSeen: null },
+      }
     }
   }
   onValue(r, handler)
@@ -647,6 +729,16 @@ const startFriendsListener = () => {
     allFriends.value       = newList
     isLoadingFriends.value = false
     emit('update-badge', inbox.value.length)
+    // Hanavaozina ny relationship status ao amin'ny viewer profile raha misokatra
+    if (playerProfileData.value) {
+      const uid = playerProfileData.value.firebaseUid
+      playerProfileData.value = {
+        ...playerProfileData.value,
+        isFriend:          isFriend(uid),
+        isPendingSent:     isPendingSent(uid),
+        isPendingReceived: isPendingReceived(uid),
+      }
+    }
   }, () => { isLoadingFriends.value = false })
 }
 
@@ -668,6 +760,8 @@ const doSearch = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message)
     searchResults.value = data.results || []
+    // Subscribe presence an'ireo results
+    searchResults.value.forEach(p => subscribePresence(p.firebaseUid))
   } catch { searchResults.value = [] }
   finally { searchDone.value = true; isSearching.value = false }
 }
@@ -823,7 +917,6 @@ const handleClose = () => emit('close')
 .srch-btn:hover:not(:disabled) { background:rgba(255,220,100,.32); }
 .srch-btn:disabled { cursor:default; opacity:.55; }
 
-/* ── List — position:relative mba hahafahana nametraka popup ao anatiny ── */
 .flist {
   display:flex; flex-direction:column;
   gap:7px; overflow-y:auto; flex:1; padding-right:4px;
@@ -832,7 +925,6 @@ const handleClose = () => emit('close')
 .flist::-webkit-scrollbar { width:4px; }
 .flist::-webkit-scrollbar-thumb { background:rgba(255,220,100,.2); border-radius:4px; }
 
-/* ── Row ── */
 .fi {
   display:flex; align-items:center; justify-content:space-between;
   padding:9px 11px;
@@ -878,7 +970,6 @@ const handleClose = () => emit('close')
 .fb:hover:not(:disabled) { filter:brightness(1.15); transform:scale(1.04); }
 .fb:disabled { opacity:.55; cursor:not-allowed; }
 
-/* ── Spinners ── */
 @keyframes btnSpin { to { transform:rotate(360deg); } }
 .btn-spin {
   display:inline-block; width:13px; height:13px;
@@ -889,7 +980,6 @@ const handleClose = () => emit('close')
 .btn-spin-red   { border-color:rgba(255,128,128,.25); border-top-color:#ff8080; }
 .btn-spin-gold  { border-color:rgba(255,217,102,.25); border-top-color:var(--gd); }
 
-/* ── Empty ── */
 .empty {
   flex:1; display:flex; flex-direction:column;
   align-items:center; justify-content:center;
@@ -924,11 +1014,9 @@ const handleClose = () => emit('close')
   pointer-events: auto;
 }
 
-/* Transition popup */
 .pop-anim-enter-active, .pop-anim-leave-active { transition: opacity .15s, transform .15s; }
 .pop-anim-enter-from, .pop-anim-leave-to { opacity: 0; transform: scaleY(.85); transform-origin: top right; }
 
-/* ── Popup buttons ── */
 .pop-btn {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 12px; border: none; border-radius: 12px;
@@ -942,10 +1030,12 @@ const handleClose = () => emit('close')
 .pop-btn .material-icons { font-size: 17px; flex-shrink: 0; }
 
 .pop-profile {
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: rgba(255,245,200,.55);
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15);
+  color: rgba(255,245,200,.85);
 }
+.pop-profile:hover:not(:disabled) { background: rgba(255,255,255,.14); }
+
 .pop-challenge {
   background: rgba(255,200,60,.14);
   border: 1px solid rgba(255,200,60,.35);
@@ -980,5 +1070,12 @@ const handleClose = () => emit('close')
   color: #ff6b6b;
 }
 .pop-remove:hover:not(:disabled) { background: rgba(220,50,50,.22); }
+
+.pop-report {
+  background: rgba(255,140,0,.1);
+  border: 1px solid rgba(255,140,0,.25);
+  color: rgba(255,180,60,.7);
+}
+.pop-report:hover:not(:disabled) { background: rgba(255,140,0,.18); color: rgba(255,180,60,.9); }
 
 </style>
