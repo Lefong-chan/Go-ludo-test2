@@ -57,7 +57,6 @@ module.exports = async (req, res) => {
 
       const trimmed = username.trim();
 
-      // ── Validation ──────────────────────────────────────────
       if (trimmed.length < 3 || trimmed.length > 9) {
         return res.status(400).json({ message: 'Username must be 3–9 characters.' });
       }
@@ -103,10 +102,39 @@ module.exports = async (req, res) => {
       const { avatar } = req.body;
       if (!avatar) return res.status(400).json({ message: 'Avatar required' });
 
-      await db.collection('users').doc(uid).update({
-        avatar,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      await db.collection('users').doc(uid).update({ avatar, updatedAt: now });
+
+      try {
+        const friendsSnap = await db.collection('users').doc(uid)
+          .collection('friends')
+          .where('status', '==', 'accepted')
+          .get();
+
+        if (!friendsSnap.empty) {
+          const BATCH_SIZE = 400;
+          let batch       = db.batch();
+          let writeCount  = 0;
+
+          for (const friendDoc of friendsSnap.docs) {
+            const friendUid = friendDoc.id;
+            const ref = db.collection('users').doc(friendUid)
+              .collection('friends').doc(uid);
+            batch.update(ref, { avatar, updatedAt: now });
+            writeCount++;
+
+            if (writeCount === BATCH_SIZE) {
+              await batch.commit();
+              batch      = db.batch();
+              writeCount = 0;
+            }
+          }
+
+          if (writeCount > 0) await batch.commit();
+        }
+      } catch {
+      }
 
       return res.status(200).json({ message: 'Avatar updated.', avatar });
     }
