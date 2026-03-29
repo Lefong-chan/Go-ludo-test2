@@ -49,7 +49,12 @@ module.exports = async (req, res) => {
         snap.forEach(doc => {
           if (doc.id !== myUid) {
             const d = doc.data();
-            results.push({ firebaseUid: doc.id, username: d.username, shortId: d.shortId });
+            results.push({
+              firebaseUid: doc.id,
+              username:    d.username,
+              shortId:     d.shortId,
+              avatar:      d.avatar || '👤',
+            });
           }
         });
 
@@ -64,7 +69,12 @@ module.exports = async (req, res) => {
         snap.forEach(doc => {
           if (doc.id !== myUid) {
             const d = doc.data();
-            results.push({ firebaseUid: doc.id, username: d.username, shortId: d.shortId });
+            results.push({
+              firebaseUid: doc.id,
+              username:    d.username,
+              shortId:     d.shortId,
+              avatar:      d.avatar || '👤',
+            });
           }
         });
       }
