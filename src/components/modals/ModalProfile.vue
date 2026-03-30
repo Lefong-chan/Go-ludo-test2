@@ -28,37 +28,35 @@
           <button
             v-if="!isViewer"
             class="btn-edit-avatar"
+            :class="{ 'avatar-editing': avatarSaving }"
             @click="showAvatarPicker = true"
             :disabled="avatarSaving"
             title="Change avatar"
           >
             <span class="material-icons">edit</span>
           </button>
-          <!-- Statut enligne: mode viewer -->
-          <div v-if="isViewer" class="viewer-status" :class="viewerOnline ? 'vstatus-on' : 'vstatus-off'">
-            <span class="vstatus-dot">●</span>
-          </div>
+          <!-- Statut enligne sur avatar: supprimé en mode viewer -->
         </div>
 
         <!-- Username + UID -->
         <div class="identity-block">
           <div class="p-name">{{ displayUsername }}</div>
 
-          <!-- Mode propre: UID + copy -->
+          <!-- UID + copy (bouton intégré dans le cadre) -->
           <div class="p-uid-row">
             <div class="p-uid">
               <span class="uid-label">UID</span>
               <span class="uid-val">{{ displayUid }}</span>
+              <button
+                class="btn-copy-uid"
+                :class="{ copied: uidCopied }"
+                :disabled="uidCopied"
+                @click="copyUid"
+                :title="uidCopied ? 'Copied!' : 'Copy UID'"
+              >
+                <span class="material-icons copy-icon">{{ uidCopied ? 'check_circle' : 'content_copy' }}</span>
+              </button>
             </div>
-            <button
-              class="btn-copy-uid"
-              :class="{ copied: uidCopied }"
-              :disabled="uidCopied"
-              @click="copyUid"
-              :title="uidCopied ? 'Copied!' : 'Copy UID'"
-            >
-              <span class="material-icons copy-icon">{{ uidCopied ? 'check_circle' : 'content_copy' }}</span>
-            </button>
           </div>
 
           <!-- Mode viewer: presence -->
@@ -493,24 +491,15 @@ const fetchAndShowEmail = async () => {
   background: linear-gradient(135deg, #c9a83a, #ffd966);
   color: #07192e;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: .2s;
+  cursor: pointer;
+  transition: opacity .35s ease, transform .2s, box-shadow .2s;
   box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  opacity: 1;
 }
 .btn-edit-avatar .material-icons { font-size: 14px; }
-.btn-edit-avatar:hover:not(:disabled) { transform: scale(1.15); box-shadow: 0 4px 14px rgba(255,200,60,.4); }
-.btn-edit-avatar:disabled { opacity: .5; cursor: not-allowed; }
-
-/* ── Viewer: statut badge sur avatar ── */
-.viewer-status {
-  position: absolute; bottom: -2px; right: -2px;
-  width: 20px; height: 20px; border-radius: 50%;
-  border: 2.5px solid #071e3d;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 8px; font-weight: 900;
-}
-.vstatus-on  { background: #1adb6a; color: #052010; }
-.vstatus-off { background: rgba(255,255,255,.15); color: rgba(255,245,200,.4); }
-.vstatus-dot { line-height: 1; }
+.btn-edit-avatar:hover:not(:disabled):not(.avatar-editing) { transform: scale(1.15); box-shadow: 0 4px 14px rgba(255,200,60,.4); }
+.btn-edit-avatar:disabled { cursor: not-allowed; }
+.btn-edit-avatar.avatar-editing { opacity: 0; }
 
 /* ── Identity ── */
 .identity-block {
@@ -524,14 +513,14 @@ const fetchAndShowEmail = async () => {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ── UID row: badge + copy button ── */
+/* ── UID row: badge + copy button intégré ── */
 .p-uid-row {
-  display: flex; align-items: center; gap: 6px; align-self: flex-start;
+  display: flex; align-items: center; align-self: flex-start;
 }
 
 .p-uid {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 10px; border-radius: 20px;
+  padding: 3px 8px 3px 10px; border-radius: 20px;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,220,100,.15);
   font-size: 12px; font-weight: 600; color: rgba(255,245,200,.5);
@@ -544,16 +533,15 @@ const fetchAndShowEmail = async () => {
 .uid-val { color: rgba(255,245,200,.65); }
 
 .btn-copy-uid {
-  width: 26px; height: 26px; border-radius: 50%; border: none;
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.12);
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,.1);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: background .2s, transform .15s;
-  flex-shrink: 0;
+  flex-shrink: 0; margin-left: 2px;
 }
-.btn-copy-uid:hover:not(:disabled) { background: rgba(255,255,255,.14); transform: scale(1.1); }
+.btn-copy-uid:hover:not(:disabled) { background: rgba(255,255,255,.2); transform: scale(1.1); }
 .btn-copy-uid:disabled { cursor: default; }
-.btn-copy-uid .copy-icon { font-size: 14px; color: rgba(255,245,200,.4); transition: color .25s; }
+.btn-copy-uid .copy-icon { font-size: 12px; color: rgba(255,245,200,.4); transition: color .25s; }
 .btn-copy-uid.copied .copy-icon { color: #2bef7a; }
 
 /* ── Viewer: presence text ── */
