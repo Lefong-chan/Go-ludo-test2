@@ -126,13 +126,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { initializeApp, getApps }      from 'firebase/app'
 import { getFirestore, doc, getDoc, onSnapshot } from 'firebase/firestore'
-import {
-  getDatabase,
-  ref      as dbRef,
-  set      as dbSet,
-  onDisconnect,
-  serverTimestamp,
-} from 'firebase/database'
+
+import { usePresence } from '../composables/usePresence'
 
 import ModalSocial   from '../components/modals/ModalSocial.vue'
 import ModalSettings from '../components/modals/ModalSettings.vue'
@@ -152,7 +147,9 @@ const firebaseConfig = {
 }
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 const fsDb        = getFirestore(firebaseApp)
-const rtdb        = getDatabase(firebaseApp)
+
+// ── Presence (composable) ─────────────────────────────────────
+const { initMyPresence, destroyMyPresence } = usePresence()
 
 // ── State ─────────────────────────────────────────────────────
 const showSocial    = ref(false)
@@ -167,35 +164,7 @@ const wallet          = ref(0)
 const avatar          = ref('👤')
 const userFirebaseUid = ref('')
 
-let unsubscribe    = null
-let myPresenceRef  = null
-
-// ── Presence ──────────────────────────────────────────────────
-const initMyPresence = async (uid) => {
-  if (!uid) return
-  myPresenceRef = dbRef(rtdb, `presence/${uid}`)
-
-  await onDisconnect(myPresenceRef).set({
-    online:   false,
-    lastSeen: serverTimestamp(),
-  })
-
-  await dbSet(myPresenceRef, {
-    online:   true,
-    lastSeen: serverTimestamp(),
-  })
-}
-
-const destroyMyPresence = async () => {
-  if (!myPresenceRef) return
-  try {
-    await dbSet(myPresenceRef, {
-      online:   false,
-      lastSeen: serverTimestamp(),
-    })
-  } catch { }
-  myPresenceRef = null
-}
+let unsubscribe = null
 
 // ── onMounted ─────────────────────────────────────────────────
 onMounted(async () => {
@@ -226,8 +195,7 @@ onUnmounted(() => {
 })
 
 const handleBeforeUnload = () => {
-  const token = localStorage.getItem('user_token')
-  if (!token || !myPresenceRef) return
+  // Presence handled by onDisconnect in usePresence
 }
 
 const fetchUsernameFromFirestore = async (fbUid) => {
