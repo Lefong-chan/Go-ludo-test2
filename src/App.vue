@@ -1,36 +1,21 @@
 <template>
-  <div id="app-main">
-    <div v-if="!isLoggedIn">
-      <LoginRegister @auth-success="handleSuccess" />
-    </div>
-    
-    <div v-else>
-      <Dashboard @logout="handleLogout" />
-    </div>
-  </div>
+  <LoginRegister v-if="!isAuthenticated" @auth-success="onAuthSuccess" />
+  <Dashboard     v-else                  @logout="onLogout" />
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import LoginRegister from './components/LoginRegister.vue'
 import Dashboard from './components/Dashboard.vue'
 
-const isLoggedIn = ref(false)
+const isAuthenticated = ref(!!localStorage.getItem('user_token'))
 
-onMounted(() => {
-  const token = localStorage.getItem('user_token')
-  if (token) {
-    isLoggedIn.value = true
-  }
-})
-
-const handleSuccess = () => {
-  isLoggedIn.value = true
+const onAuthSuccess = () => {
+  isAuthenticated.value = true
 }
 
-const handleLogout = () => {
-  localStorage.clear()
-  isLoggedIn.value = false
+const onLogout = () => {
+  isAuthenticated.value = false
 }
 </script>
 
