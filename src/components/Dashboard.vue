@@ -94,8 +94,12 @@
       </div>
     </footer>
 
+    <!-- ── Modals ── -->
     <ModalSocial
       :show="showSocial"
+      :my-firebase-uid="userFirebaseUid"
+      :my-username="username"
+      :my-avatar="avatar"
       @close="showSocial = false"
       @update-badge="onBadgeUpdate"
     />
@@ -127,6 +131,29 @@
       @avatar-updated="onAvatarUpdated"
     />
 
+    <!-- ── Game Room Modal ── -->
+    <ModalRoom
+      :show="showRoom"
+      :room-id="currentRoomId"
+      :my-uid="userFirebaseUid"
+      :my-name="username"
+      :my-avatar="avatar"
+      @close="onLeaveRoom"
+      @game-start="onGameStart"
+    />
+
+    <!-- ── Notification (errors + invitations) ── -->
+    <ModalNotification
+      :message="notifMessage"
+      :type="notifType"
+      :duration="notifDuration"
+      :inviter-uid="notifInviterUid"
+      :room-id="notifRoomId"
+      @close="notifMessage = ''"
+      @accept-invitation="onAcceptInvitation"
+      @decline-invitation="onDeclineInvitation"
+    />
+
   </template>
 
 </template>
@@ -139,21 +166,25 @@ import {
   getDatabase,
   ref      as dbRef,
   set      as dbSet,
+  onValue,
+  off,
+  remove,
   onDisconnect,
   serverTimestamp,
 } from 'firebase/database'
 
-import ModalSocial   from '../components/modals/ModalSocial.vue'
-import ModalSettings from '../components/modals/ModalSettings.vue'
-import ModalWallet   from '../components/modals/ModalWallet.vue'
-import ModalUsername from '../components/modals/ModalUsername.vue'
-import ModalProfile  from '../components/modals/ModalProfile.vue'
+import ModalSocial        from '../components/modals/ModalSocial.vue'
+import ModalSettings      from '../components/modals/ModalSettings.vue'
+import ModalWallet        from '../components/modals/ModalWallet.vue'
+import ModalUsername      from '../components/modals/ModalUsername.vue'
+import ModalProfile       from '../components/modals/ModalProfile.vue'
+import ModalRoom          from '../components/modals/ModalRoom.vue'
+import ModalNotification  from '../components/modals/ModalNotification.vue'
 
-// ─── Emit ────────────────────────────────────────────────────────────────────
-
+// ─── Emit ─────────────────────────────────────────────────────────────────────
 const emit = defineEmits(['logout'])
 
-// ─── Firebase ────────────────────────────────────────────────────────────────
+// ─── Firebase ─────────────────────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -167,7 +198,7 @@ const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConf
 const fsDb        = getFirestore(firebaseApp)
 const rtdb        = getDatabase(firebaseApp)
 
-// ─── State ───────────────────────────────────────────────────────────────────
+// ─── State ────────────────────────────────────────────────────────────────────
 const isCheckingSession = ref(true)
 
 const showSocial    = ref(false)
@@ -175,6 +206,7 @@ const showSettings  = ref(false)
 const showWallet    = ref(false)
 const showUsername  = ref(false)
 const showProfile   = ref(false)
+const showRoom      = ref(false)
 
 const username        = ref('Player')
 const userUid         = ref('000000000')
@@ -182,10 +214,150 @@ const wallet          = ref(0)
 const avatar          = ref('👤')
 const userFirebaseUid = ref('')
 
+// ─── Notification state ───────────────────────────────────────────────────────
+const notifMessage     = ref('')
+const notifType        = ref('error')
+const notifDuration    = ref(4000)
+const notifInviterUid  = ref('')
+const notifRoomId      = ref('')
+
+const showNotif = (msg, type = 'error', duration = 4000, extra = {}) => {
+  notifMessage.value    = ''
+  notifType.value       = type
+  notifDuration.value   = duration
+  notifInviterUid.value = extra.inviterUid || ''
+  notifRoomId.value     = extra.roomId     || ''
+  setTimeout(() => { notifMessage.value = msg }, 30)
+}
+
+// ─── Room state ───────────────────────────────────────────────────────────────
+const currentRoomId = ref('')
+
+// ─── Invitation listener (RTDB: invitations/<myUid>) ──────────────────────────
+let inviteRef     = null
+let inviteHandler = null
+
+const startInvitationListener = (uid) => {
+  if (!uid) return
+  inviteRef     = dbRef(rtdb, `invitations/${uid}`)
+  inviteHandler = (snap) => {
+    const inv = snap.val()
+    if (!inv || inv.status !== 'pending') return
+    // Asehoy ilay modal invitation
+    showNotif(
+      `${inv.inviterUsername || 'Someone'} invited you to play!`,
+      'invitation',
+      0,
+      { inviterUid: inv.inviterUid, roomId: inv.roomId }
+    )
+  }
+  onValue(inviteRef, inviteHandler)
+}
+
+const stopInvitationListener = () => {
+  if (inviteRef && inviteHandler) {
+    off(inviteRef, 'value', inviteHandler)
+    inviteRef     = null
+    inviteHandler = null
+  }
+}
+
+// ─── Accept invitation ────────────────────────────────────────────────────────
+const onAcceptInvitation = async ({ inviterUid, roomId }) => {
+  if (!roomId) return
+  try {
+    const token = localStorage.getItem('user_token')
+    const res   = await fetch(`/api/room?action=join-room`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ roomId, username: username.value, avatar: avatar.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showNotif(data.message || 'Could not join room.', 'error')
+      return
+    }
+    currentRoomId.value = roomId
+    showRoom.value      = true
+  } catch {
+    showNotif('Network error. Could not join room.', 'error')
+  }
+}
+
+// ─── Decline invitation ───────────────────────────────────────────────────────
+// Ra mandaha fotsiny ilay modal (tsy nanindry Decline, navelany niala),
+// tsy ampisehoana ny "declined" message ao amin'ilay inviter.
+// Ra nanindry Decline dia ampisehoana ao amin'ilay inviter.
+const onDeclineInvitation = async ({ inviterUid, roomId }) => {
+  if (!inviterUid) return
+  try {
+    const token = localStorage.getItem('user_token')
+    // Fafao ny invitation
+    await fetch(`/api/room?action=decline-invite`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ inviterUid }),
+    })
+    // Mampiseho ny declined-notification ao amin'ilay inviter via RTDB
+    const declineRef = dbRef(rtdb, `inviteResponse/${inviterUid}`)
+    await dbSet(declineRef, {
+      responderUid:      userFirebaseUid.value,
+      responderUsername: username.value,
+      status:            'declined',
+      roomId,
+      at:                Date.now(),
+    })
+    // Auto-remove after 5s
+    setTimeout(async () => {
+      try { await remove(declineRef) } catch { }
+    }, 5000)
+  } catch { }
+}
+
+// ─── Invite response listener (for the inviter to know if declined) ────────────
+let inviteRespRef     = null
+let inviteRespHandler = null
+
+const startInviteResponseListener = (uid) => {
+  if (!uid) return
+  inviteRespRef     = dbRef(rtdb, `inviteResponse/${uid}`)
+  inviteRespHandler = (snap) => {
+    const resp = snap.val()
+    if (!resp || resp.status !== 'declined') return
+    showNotif(
+      `${resp.responderUsername || 'The player'} declined your invitation.`,
+      'info',
+      4000
+    )
+    // Fafao avy hatrany
+    remove(inviteRespRef).catch(() => {})
+  }
+  onValue(inviteRespRef, inviteRespHandler)
+}
+
+const stopInviteResponseListener = () => {
+  if (inviteRespRef && inviteRespHandler) {
+    off(inviteRespRef, 'value', inviteRespHandler)
+    inviteRespRef     = null
+    inviteRespHandler = null
+  }
+}
+
+// ─── Leave room ────────────────────────────────────────────────────────────────
+const onLeaveRoom = () => {
+  showRoom.value      = false
+  currentRoomId.value = ''
+}
+
+const onGameStart = ({ roomId, players }) => {
+  // TODO: naviguer vers la vue de jeu
+  console.log('Game start!', roomId, players)
+}
+
+// ─── Presence ─────────────────────────────────────────────────────────────────
 let unsubscribe   = null
 let myPresenceRef = null
 
-// ─── Presence ────────────────────────────────────────────────────────────────
 const initMyPresence = async (uid) => {
   if (!uid) return
   myPresenceRef = dbRef(rtdb, `presence/${uid}`)
@@ -201,6 +373,8 @@ const destroyMyPresence = async () => {
 
 const forceLogout = () => {
   if (unsubscribe) { unsubscribe(); unsubscribe = null }
+  stopInvitationListener()
+  stopInviteResponseListener()
   destroyMyPresence()
   localStorage.removeItem('user_token')
   localStorage.removeItem('user_refresh_token')
@@ -213,11 +387,9 @@ const forceLogout = () => {
 }
 
 // ─── Refresh token ────────────────────────────────────────────────────────────
-
 const tryRefreshToken = async () => {
   const refreshToken = localStorage.getItem('user_refresh_token')
   if (!refreshToken) return null
-
   try {
     const res = await fetch('/api/session?action=refresh-token', {
       method:  'POST',
@@ -227,24 +399,16 @@ const tryRefreshToken = async () => {
     if (!res.ok) return null
     const data = await res.json()
     if (!data.token) return null
-
     localStorage.setItem('user_token',         data.token)
     localStorage.setItem('user_refresh_token', data.refreshToken || refreshToken)
     return data.token
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 // ─── Session check ────────────────────────────────────────────────────────────
-
 const checkSession = async () => {
   let token = localStorage.getItem('user_token')
-
-  if (!token) {
-    forceLogout()
-    return
-  }
+  if (!token) { forceLogout(); return }
 
   let sessionData = null
 
@@ -256,36 +420,22 @@ const checkSession = async () => {
     if (res.ok) {
       sessionData = await res.json()
     } else if (res.status === 401) {
-
       token = await tryRefreshToken()
-      if (!token) {
-        forceLogout()
-        return
-      }
-
+      if (!token) { forceLogout(); return }
       const res2 = await fetch('/api/session?action=check-session', {
         headers: { 'Authorization': `Bearer ${token}` },
       })
-      if (res2.ok) {
-        sessionData = await res2.json()
-      } else {
-        forceLogout()
-        return
-      }
-    } else {
-
-      forceLogout()
-      return
-    }
+      if (res2.ok) { sessionData = await res2.json() }
+      else { forceLogout(); return }
+    } else { forceLogout(); return }
   } catch {
-
     const fbUid = localStorage.getItem('user_firebase_uid')
     if (!fbUid) { forceLogout(); return }
     userFirebaseUid.value = fbUid
-    userUid.value         = localStorage.getItem('user_uid')         || '000000000'
-    wallet.value          = localStorage.getItem('user_wallet')      || 0
-    avatar.value          = localStorage.getItem('user_avatar')      || '👤'
-    const savedUsername   = localStorage.getItem('user_username')    || ''
+    userUid.value         = localStorage.getItem('user_uid')      || '000000000'
+    wallet.value          = localStorage.getItem('user_wallet')   || 0
+    avatar.value          = localStorage.getItem('user_avatar')   || '👤'
+    const savedUsername   = localStorage.getItem('user_username') || ''
     if (savedUsername && savedUsername !== 'New Player') {
       username.value = savedUsername
     } else {
@@ -293,13 +443,15 @@ const checkSession = async () => {
     }
     isCheckingSession.value = false
     initMyPresence(fbUid)
+    startInvitationListener(fbUid)
+    startInviteResponseListener(fbUid)
     return
   }
 
   const fbUid = sessionData.firebaseUid
   userFirebaseUid.value = fbUid
-  userUid.value         = sessionData.uid      || localStorage.getItem('user_uid') || '000000000'
-  wallet.value          = sessionData.wallet   ?? 0
+  userUid.value         = sessionData.uid    || localStorage.getItem('user_uid') || '000000000'
+  wallet.value          = sessionData.wallet ?? 0
   avatar.value          = localStorage.getItem('user_avatar') || '👤'
 
   localStorage.setItem('user_firebase_uid', fbUid)
@@ -308,6 +460,8 @@ const checkSession = async () => {
 
   await fetchUsernameFromFirestore(fbUid)
   initMyPresence(fbUid)
+  startInvitationListener(fbUid)
+  startInviteResponseListener(fbUid)
 
   isCheckingSession.value = false
 }
@@ -334,22 +488,18 @@ const fetchUsernameFromFirestore = async (fbUid) => {
         showUsername.value = true
         startFirestoreListener(fbUid)
       }
-    } else {
-      showUsername.value = true
-    }
+    } else { showUsername.value = true }
   } catch {
     const savedUsername = localStorage.getItem('user_username')
     const hasUsername   = savedUsername && savedUsername !== 'New Player' && savedUsername.trim() !== ''
     if (hasUsername) {
       username.value = savedUsername
       startFirestoreListener(fbUid)
-    } else {
-      showUsername.value = true
-    }
+    } else { showUsername.value = true }
   }
 }
 
-// ─── Firestore listener ───────────────────────────────────────────────────────
+// ─── Firestore listener ────────────────────────────────────────────────────────
 const startFirestoreListener = (fbUid) => {
   if (!fbUid || unsubscribe) return
   const userRef = doc(fsDb, 'users', fbUid)
@@ -373,7 +523,7 @@ const startFirestoreListener = (fbUid) => {
   })
 }
 
-// ─── Lifecycle ────────────────────────────────────────────────────────────────
+// ─── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await checkSession()
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -381,17 +531,17 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
+  stopInvitationListener()
+  stopInviteResponseListener()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   destroyMyPresence()
 })
 
-const handleBeforeUnload = () => {
-  destroyMyPresence()
-}
+const handleBeforeUnload = () => { destroyMyPresence() }
 
-// ─── Handlers ─────────────────────────────────────────────────────────────────
+// ─── Handlers ──────────────────────────────────────────────────────────────────
 const onUsernameSet = (newUsername) => {
-  username.value     = newUsername
+  username.value = newUsername
   localStorage.setItem('user_username', newUsername)
   showUsername.value = false
 }
