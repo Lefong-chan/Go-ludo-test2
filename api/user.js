@@ -27,70 +27,6 @@ module.exports = async (req, res) => {
   try {
 
     // ════════════════════════════════════════════════════════════
-    // CHECK USERNAME
-    // POST /api/user?action=check-username
-    // body: { username }
-    // ════════════════════════════════════════════════════════════
-    if (action === 'check-username') {
-      const { username } = req.body;
-      if (!username) return res.status(400).json({ message: 'Username required' });
-
-      const snapshot = await db.collection('users')
-        .where('username', '==', username)
-        .limit(1)
-        .get();
-
-      return res.status(200).json({ taken: !snapshot.empty });
-    }
-
-    // ════════════════════════════════════════════════════════════
-    // SET USERNAME
-    // POST /api/user?action=set-username
-    // Headers: Authorization: Bearer <idToken>
-    // body: { username }
-    // ════════════════════════════════════════════════════════════
-    if (action === 'set-username') {
-      const uid = await verifyToken(req);
-
-      const { username } = req.body;
-      if (!username) return res.status(400).json({ message: 'Username required' });
-
-      const trimmed = username.trim();
-
-      if (trimmed.length < 3 || trimmed.length > 9) {
-        return res.status(400).json({ message: 'Username must be 3–9 characters.' });
-      }
-      if (!/^[A-Za-z]/.test(trimmed)) {
-        return res.status(400).json({ message: 'Username must start with a letter.' });
-      }
-      if (!/^[A-Za-z0-9]+$/.test(trimmed)) {
-        return res.status(400).json({ message: 'No special characters allowed.' });
-      }
-      if (!/^[A-Za-z]+[0-9]*$/.test(trimmed)) {
-        return res.status(400).json({ message: 'Letters must come before numbers.' });
-      }
-
-      const finalUsername = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-
-      const snapshot = await db.collection('users')
-        .where('username', '==', finalUsername)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        return res.status(409).json({ message: 'This username is already taken.' });
-      }
-
-      await db.collection('users').doc(uid).update({
-        username:      finalUsername,
-        usernameLower: finalUsername.toLowerCase(),
-        updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      return res.status(200).json({ message: 'Username set successfully.', username: finalUsername });
-    }
-
-    // ════════════════════════════════════════════════════════════
     // UPDATE AVATAR
     // POST /api/user?action=update-avatar
     // Headers: Authorization: Bearer <idToken>
@@ -149,6 +85,27 @@ module.exports = async (req, res) => {
       const userRecord = await admin.auth().getUser(uid);
 
       return res.status(200).json({ email: userRecord.email || '' });
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // GET PROFILE
+    // GET /api/user?action=get-profile
+    // Headers: Authorization: Bearer <idToken>
+    // ════════════════════════════════════════════════════════════
+    if (action === 'get-profile') {
+      const uid     = await verifyToken(req);
+      const userDoc = await db.collection('users').doc(uid).get();
+
+      if (!userDoc.exists) return res.status(404).json({ message: 'User not found' });
+
+      const d = userDoc.data();
+      return res.status(200).json({
+        firebaseUid: uid,
+        shortId:     d.shortId,
+        username:    d.username,
+        avatar:      d.avatar || '👤',
+        wallet:      d.wallet  || 0,
+      });
     }
 
     return res.status(404).json({ message: 'Endpoint not found' });
