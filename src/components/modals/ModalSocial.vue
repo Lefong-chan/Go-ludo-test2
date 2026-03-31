@@ -418,9 +418,7 @@
 import { ref, computed, watch, onUnmounted, reactive, nextTick } from 'vue'
 import { initializeApp, getApps }            from 'firebase/app'
 import { getFirestore, collection, onSnapshot as fsOnSnapshot } from 'firebase/firestore'
-
-import { usePresence } from '../../composables/usePresence'
-
+import { getDatabase, ref as dbRef, onValue, off } from 'firebase/database'
 import ModalError   from './ModalError.vue'
 import ModalConfirm from './ModalConfirm.vue'
 import ModalProfile from './ModalProfile.vue'
@@ -437,15 +435,7 @@ const firebaseConfig = {
 }
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 const fsDb        = getFirestore(firebaseApp)
-
-// ── Presence (composable) ──────────────────────────────────────
-const {
-  getPresence,
-  formatLastSeen,
-  subscribePresence,
-  unsubscribePresence,
-  stopAllPresenceListeners,
-} = usePresence()
+const rtdb        = getDatabase(firebaseApp)
 
 // ── API ────────────────────────────────────────────────────────
 const API_FRIENDS  = '/api/friends'
@@ -530,11 +520,12 @@ const openPlayerProfile = (user) => {
   playerProfileVisible.value = true
 }
 
-// Callbacks - ModalProfile viewer
+// Callbacks avy amin'ny ModalProfile viewer
 const onProfileAccept = async (firebaseUid) => {
   const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
     || searchResults.value.find(p => p.firebaseUid === firebaseUid)
   if (user) await acceptRequest(user)
+  // Hanavaozina ny data ao amin'ny playerProfileData
   if (playerProfileData.value?.firebaseUid === firebaseUid) {
     playerProfileData.value = {
       ...playerProfileData.value,
@@ -568,7 +559,7 @@ const onProfileChallenge = async (firebaseUid) => {
   if (user) await challengeFriend(user)
 }
 
-// ── Popup ───────────────────────────────────────────
+// ── Popup cadre kely ───────────────────────────────────────────
 const popup = reactive({
   visible: false,
   uid:     '',
@@ -583,7 +574,13 @@ const listFriends = ref(null)
 const listInbox   = ref(null)
 const listSearch  = ref(null)
 
-const POPUP_WIDTH     = 180
+const getListRef = () => {
+  if (popup.tab === 'friends') return listFriends.value
+  if (popup.tab === 'inbox')   return listInbox.value
+  return listSearch.value
+}
+
+const POPUP_WIDTH    = 180
 const POPUP_RIGHT_GAP = 14
 
 const popupStyle = computed(() => ({
@@ -630,6 +627,53 @@ const closePopup = () => {
 // ── Friends data ───────────────────────────────────────────────
 const allFriends   = ref([])
 let   unsubFriends = null
+
+// ── Presence ───────────────────────────────────────────────────
+const presenceMap    = ref({})
+const presenceUnsubs = {}
+
+const getPresence = (uid) => presenceMap.value[uid] ?? { online: false, lastSeen: null }
+
+const subscribePresence = (uid) => {
+  if (!uid || presenceUnsubs[uid]) return
+  const r = dbRef(rtdb, `presence/${uid}`)
+  const handler = (snap) => {
+    const val = snap.val()
+    presenceMap.value = {
+      ...presenceMap.value,
+      [uid]: val ? { online: !!val.online, lastSeen: val.lastSeen ?? null } : { online: false, lastSeen: null },
+    }
+    // Hanavaozina ny playerProfileData raha ilay olona no sokafana
+    if (playerProfileData.value?.firebaseUid === uid) {
+      playerProfileData.value = {
+        ...playerProfileData.value,
+        presence: val ? { online: !!val.online, lastSeen: val.lastSeen ?? null } : { online: false, lastSeen: null },
+      }
+    }
+  }
+  onValue(r, handler)
+  presenceUnsubs[uid] = () => off(r, 'value', handler)
+}
+
+const unsubscribePresence = (uid) => {
+  if (presenceUnsubs[uid]) { presenceUnsubs[uid](); delete presenceUnsubs[uid] }
+}
+
+const stopAllPresenceListeners = () => {
+  Object.keys(presenceUnsubs).forEach(unsubscribePresence)
+}
+
+const formatLastSeen = (ts) => {
+  if (!ts) return 'Offline'
+  const diffMs  = Date.now() - ts
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1)  return 'Just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24)  return `${diffHr} hr ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`
+}
 
 // ── Search state ───────────────────────────────────────────────
 const friendSearch          = ref('')
@@ -685,7 +729,7 @@ const startFriendsListener = () => {
     allFriends.value       = newList
     isLoadingFriends.value = false
     emit('update-badge', inbox.value.length)
-
+    // Hanavaozina ny relationship status ao amin'ny viewer profile raha misokatra
     if (playerProfileData.value) {
       const uid = playerProfileData.value.firebaseUid
       playerProfileData.value = {
@@ -716,6 +760,7 @@ const doSearch = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message)
     searchResults.value = data.results || []
+    // Subscribe presence an'ireo results
     searchResults.value.forEach(p => subscribePresence(p.firebaseUid))
   } catch { searchResults.value = [] }
   finally { searchDone.value = true; isSearching.value = false }
