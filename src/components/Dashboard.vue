@@ -102,6 +102,7 @@
       :my-avatar="avatar"
       @close="showSocial = false"
       @update-badge="onBadgeUpdate"
+      @open-room="onOpenRoom"
     />
 
     <ModalSettings
@@ -129,6 +130,7 @@
       @close="showProfile = false"
       @open-social="onProfileOpenSocial"
       @avatar-updated="onAvatarUpdated"
+      @challenge="onProfileChallenge"
     />
 
     <!-- ── Game Room Modal ── -->
@@ -307,14 +309,13 @@ const onDeclineInvitation = async ({ inviterUid, roomId }) => {
       roomId,
       at:                Date.now(),
     })
-    // Auto-remove after 5s
+    
     setTimeout(async () => {
       try { await remove(declineRef) } catch { }
     }, 5000)
   } catch { }
 }
 
-// ─── Invite response listener (for the inviter to know if declined) ────────────
 let inviteRespRef     = null
 let inviteRespHandler = null
 
@@ -343,6 +344,45 @@ const stopInviteResponseListener = () => {
   }
 }
 
+// ─── Open Room
+const onOpenRoom = (roomId) => {
+  currentRoomId.value = roomId
+  showSocial.value  = false
+  showProfile.value = false
+  setTimeout(() => { showRoom.value = true }, 300)
+}
+
+const onProfileChallenge = async (targetFirebaseUid) => {
+  try {
+    const token = localStorage.getItem('user_token')
+    const createRes = await fetch('/api/room?action=create-room', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ username: username.value, avatar: avatar.value }),
+    })
+    let createData
+    try { createData = await createRes.json() }
+    catch { showNotif('Server error. Please try again.', 'error'); return }
+    if (!createRes.ok) { showNotif(createData.message || 'Could not create room.', 'error'); return }
+    const roomId = createData.roomId
+    if (!roomId) { showNotif('Invalid room ID.', 'error'); return }
+
+    await fetch('/api/room?action=send-invite', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({
+        targetFirebaseUid,
+        roomId,
+        inviterUsername: username.value,
+      }),
+    })
+
+    onOpenRoom(roomId)
+  } catch (e) {
+    showNotif(e.message || 'Network error.', 'error')
+  }
+}
+
 // ─── Leave room ────────────────────────────────────────────────────────────────
 const onLeaveRoom = () => {
   showRoom.value      = false
@@ -350,7 +390,6 @@ const onLeaveRoom = () => {
 }
 
 const onGameStart = ({ roomId, players }) => {
-  // TODO: naviguer vers la vue de jeu
   console.log('Game start!', roomId, players)
 }
 
