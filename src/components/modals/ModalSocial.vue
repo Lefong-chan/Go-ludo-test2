@@ -367,8 +367,8 @@
     </div>
   </div>
 
-  <!-- ── ModalError ── -->
-  <ModalError
+  <!-- ── ModalNotification ── -->
+  <ModalNotification
     :message="errorMsg"
     :type="errorType"
     :duration="5000"
@@ -419,7 +419,7 @@ import { ref, computed, watch, onUnmounted, reactive, nextTick } from 'vue'
 import { initializeApp, getApps }            from 'firebase/app'
 import { getFirestore, collection, onSnapshot as fsOnSnapshot } from 'firebase/firestore'
 import { getDatabase, ref as dbRef, onValue, off } from 'firebase/database'
-import ModalError   from './ModalError.vue'
+import ModalNotification from './ModalNotification.vue'
 import ModalConfirm from './ModalConfirm.vue'
 import ModalProfile from './ModalProfile.vue'
 
@@ -443,8 +443,13 @@ const API_REQUESTS = '/api/requests'
 const FRIENDS_LIMIT = 100
 
 // ── Props / Emits ──────────────────────────────────────────────
-const props = defineProps({ show: Boolean })
-const emit  = defineEmits(['close', 'update-badge'])
+const props = defineProps({
+  show:          Boolean,
+  myFirebaseUid: { type: String, default: '' },
+  myUsername:    { type: String, default: 'Player' },
+  myAvatar:      { type: String, default: '👤' },
+})
+const emit  = defineEmits(['close', 'update-badge', 'open-room'])
 
 // ── UI state ───────────────────────────────────────────────────
 const localVisible     = ref(false)
@@ -556,7 +561,10 @@ const onProfileRemove = (firebaseUid) => {
 const onProfileChallenge = async (firebaseUid) => {
   const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
     || searchResults.value.find(p => p.firebaseUid === firebaseUid)
-  if (user) await challengeFriend(user)
+  if (user) {
+    playerProfileVisible.value = false
+    await challengeFriend(user)
+  }
 }
 
 // ── Popup cadre kely ───────────────────────────────────────────
@@ -807,7 +815,38 @@ const acceptRequest = async (f) => {
 }
 
 const declineRequest  = f => apiCall('decline-'   + f.firebaseUid, 'decline-request', { requesterFirebaseUid: f.firebaseUid })
-const challengeFriend = f => apiCall('challenge-' + f.firebaseUid, 'challenge',        { targetFirebaseUid:    f.firebaseUid })
+const challengeFriend = async (f) => {
+  const key = 'challenge-' + f.firebaseUid
+  loadingBtn.value = key
+  try {
+    const token = localStorage.getItem('user_token')
+    // 1. Mamorona room vaovao
+    const createRes = await fetch('/api/room?action=create-room', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ username: props.myUsername, avatar: props.myAvatar }),
+    })
+    const createData = await createRes.json()
+    if (!createRes.ok) { showError(createData.message || 'Could not create room.'); return }
+    const roomId = createData.roomId
+    // 2. Mandefitra invitation
+    await fetch('/api/room?action=send-invite', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({
+        targetFirebaseUid: f.firebaseUid,
+        roomId,
+        inviterUsername:   props.myUsername,
+      }),
+    })
+    // 3. Manokatra ModalRoom ho an'ilay nanao challenge
+    emit('open-room', roomId)
+  } catch (e) {
+    showError(e.message || 'Network error.')
+  } finally {
+    loadingBtn.value = null
+  }
+}
 
 // ── Watch ──────────────────────────────────────────────────────
 watch(() => props.show, val => {
