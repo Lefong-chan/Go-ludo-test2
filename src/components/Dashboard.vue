@@ -266,21 +266,39 @@ const stopInvitationListener = () => {
 
 // ─── Accept invitation ────────────────────────────────────────────────────────
 const onAcceptInvitation = async ({ inviterUid, roomId }) => {
-  if (!roomId) return
+  if (!roomId || !inviterUid) return
   try {
     const token = localStorage.getItem('user_token')
-    const res   = await fetch(`/api/room?action=join-room`, {
+
+    // 1. Miditra ao amin'ny room
+    const res = await fetch(`/api/room?action=join-room`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body:    JSON.stringify({ roomId, username: username.value, avatar: avatar.value }),
     })
-    const data = await res.json()
+    let data
+    try { data = await res.json() } catch { data = {} }
     if (!res.ok) {
       showNotif(data.message || 'Could not join room.', 'error')
       return
     }
+
+    // 2. Mampandre ilay INVITER fa nanaiky — mba hiditra amin'ny ModalRoom koa izy
+    const respRef = dbRef(rtdb, `inviteResponse/${inviterUid}`)
+    await dbSet(respRef, {
+      status:            'accepted',
+      responderUid:      userFirebaseUid.value,
+      responderUsername: username.value,
+      roomId,
+      at:                Date.now(),
+    })
+    // Auto-remove after 8s (safety cleanup)
+    setTimeout(async () => { try { await remove(respRef) } catch {} }, 8000)
+
+    // 3. Asokafana ny ModalRoom ho an'ilay nanaiky (izy ihany)
     currentRoomId.value = roomId
     showRoom.value      = true
+
   } catch {
     showNotif('Network error. Could not join room.', 'error')
   }
@@ -309,13 +327,16 @@ const onDeclineInvitation = async ({ inviterUid, roomId }) => {
       roomId,
       at:                Date.now(),
     })
-    
+    // Auto-remove after 5s
     setTimeout(async () => {
       try { await remove(declineRef) } catch { }
     }, 5000)
   } catch { }
 }
 
+// ─── Invite response listener ─────────────────────────────────────────────────
+// Mihaino ny valim-pitory avy amin'ilay notified user (accepted na declined)
+// Ilay INVITER no mandray ity signal ity
 let inviteRespRef     = null
 let inviteRespHandler = null
 
@@ -324,14 +345,26 @@ const startInviteResponseListener = (uid) => {
   inviteRespRef     = dbRef(rtdb, `inviteResponse/${uid}`)
   inviteRespHandler = (snap) => {
     const resp = snap.val()
-    if (!resp || resp.status !== 'declined') return
-    showNotif(
-      `${resp.responderUsername || 'The player'} declined your invitation.`,
-      'info',
-      4000
-    )
-    // Fafao avy hatrany
-    remove(inviteRespRef).catch(() => {})
+    if (!resp) return
+
+    if (resp.status === 'accepted') {
+      // Ilay nandefa invitation dia miditra amin'ilay Room ihany koa
+      const roomId = resp.roomId
+      if (!roomId) return
+      // Fafao ny response avy hatrany mba tsy mamerina indray
+      remove(inviteRespRef).catch(() => {})
+      // Asokafana ny ModalRoom ho an'ilay inviter — akatona modals hafa
+      onOpenRoom(roomId)
+    }
+
+    if (resp.status === 'declined') {
+      showNotif(
+        `${resp.responderUsername || 'The player'} declined your invitation.`,
+        'info',
+        4000
+      )
+      remove(inviteRespRef).catch(() => {})
+    }
   }
   onValue(inviteRespRef, inviteRespHandler)
 }
@@ -344,17 +377,24 @@ const stopInviteResponseListener = () => {
   }
 }
 
-// ─── Open Room
+// ─── Open Room ────────────────────────────────────────────────────────────────
+// Antsoina rehefa:
+//   - nanao challenge (ModalSocial / ModalProfile) → mba hiditra Room ilay inviter
+//   - nanaiky ilay notified user → avy amin'ny inviteResponse listener
 const onOpenRoom = (roomId) => {
   currentRoomId.value = roomId
+  // Akatona ny modals rehetra miasa
   showSocial.value  = false
   showProfile.value = false
-  setTimeout(() => { showRoom.value = true }, 300)
+  // Miandry 420ms (> 400ms animation hikatona) vao misokatra ModalRoom
+  setTimeout(() => { showRoom.value = true }, 420)
 }
 
+// ─── Challenge avy amin'ny ModalProfile ───────────────────────────────────────
 const onProfileChallenge = async (targetFirebaseUid) => {
   try {
     const token = localStorage.getItem('user_token')
+    // 1. Mamorona room
     const createRes = await fetch('/api/room?action=create-room', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -367,6 +407,7 @@ const onProfileChallenge = async (targetFirebaseUid) => {
     const roomId = createData.roomId
     if (!roomId) { showNotif('Invalid room ID.', 'error'); return }
 
+    // 2. Mandefitra invitation
     await fetch('/api/room?action=send-invite', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -377,6 +418,7 @@ const onProfileChallenge = async (targetFirebaseUid) => {
       }),
     })
 
+    // 3. Asokafana ny ModalRoom, akatona ny ModalProfile
     onOpenRoom(roomId)
   } catch (e) {
     showNotif(e.message || 'Network error.', 'error')
