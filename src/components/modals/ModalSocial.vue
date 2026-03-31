@@ -826,9 +826,15 @@ const challengeFriend = async (f) => {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body:    JSON.stringify({ username: props.myUsername, avatar: props.myAvatar }),
     })
-    const createData = await createRes.json()
+    // Safe JSON parse — miaro amin'ny "Unexpected token" rahefa mamerina HTML ny server
+    let createData
+    try { createData = await createRes.json() }
+    catch { showError('Server error. Please try again.'); return }
+
     if (!createRes.ok) { showError(createData.message || 'Could not create room.'); return }
     const roomId = createData.roomId
+    if (!roomId)       { showError('Invalid room ID returned.'); return }
+
     // 2. Mandefitra invitation
     await fetch('/api/room?action=send-invite', {
       method:  'POST',
