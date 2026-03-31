@@ -1,18 +1,45 @@
 <template>
   <Teleport to="body">
-    <Transition name="err-fade">
+    <Transition name="notif-fade">
       <div
         v-if="visible"
-        class="err-toast"
-        :class="'err-toast--' + type"
+        class="notif-toast"
+        :class="'notif-toast--' + type"
         role="alert"
         aria-live="assertive"
       >
-        <span class="material-icons err-icon">{{ icon }}</span>
-        <span class="err-msg">{{ message }}</span>
-        <button class="err-close" @click="close" aria-label="Close">
-          <span class="material-icons">close</span>
-        </button>
+        <!-- ── INVITATION TYPE ── -->
+        <template v-if="type === 'invitation'">
+          <div class="inv-header">
+            <span class="material-icons inv-icon">sports_esports</span>
+            <div class="inv-texts">
+              <span class="inv-title">Game Invitation</span>
+              <span class="inv-msg">{{ message }}</span>
+            </div>
+            <button class="notif-close" @click="declineInvitation" aria-label="Close">
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+          <div class="inv-actions">
+            <button class="inv-btn inv-btn-accept" @click="acceptInvitation">
+              <span class="material-icons">check_circle</span>
+              Accept
+            </button>
+            <button class="inv-btn inv-btn-decline" @click="declineInvitation">
+              <span class="material-icons">cancel</span>
+              Decline
+            </button>
+          </div>
+        </template>
+
+        <!-- ── ERROR / WARNING / INFO TYPE ── -->
+        <template v-else>
+          <span class="material-icons notif-icon">{{ icon }}</span>
+          <span class="notif-msg">{{ message }}</span>
+          <button class="notif-close" @click="close" aria-label="Close">
+            <span class="material-icons">close</span>
+          </button>
+        </template>
       </div>
     </Transition>
   </Teleport>
@@ -22,14 +49,14 @@
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
-  message: { type: String, default: '' },
-
-  type:    { type: String, default: 'error' },
-
-  duration: { type: Number, default: 4000 },
+  message:    { type: String,  default: '' },
+  type:       { type: String,  default: 'error' }, // 'error' | 'warning' | 'info' | 'invitation'
+  duration:   { type: Number,  default: 4000 },    // 0 = no auto-close (used for invitations)
+  inviterUid: { type: String,  default: '' },
+  roomId:     { type: String,  default: '' },
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'accept-invitation', 'decline-invitation'])
 
 const visible = ref(false)
 let   timer   = null
@@ -43,14 +70,28 @@ const icon = computed(() => {
 const show = () => {
   clearTimeout(timer)
   visible.value = true
-  if (props.duration > 0) {
+  
+  if (props.duration > 0 && props.type !== 'invitation') {
     timer = setTimeout(close, props.duration)
   }
 }
 
 const close = () => {
+  clearTimeout(timer)
   visible.value = false
   emit('close')
+}
+
+const acceptInvitation = () => {
+  clearTimeout(timer)
+  visible.value = false
+  emit('accept-invitation', { inviterUid: props.inviterUid, roomId: props.roomId })
+}
+
+const declineInvitation = () => {
+  clearTimeout(timer)
+  visible.value = false
+  emit('decline-invitation', { inviterUid: props.inviterUid, roomId: props.roomId })
 }
 
 watch(() => props.message, val => {
@@ -63,65 +104,169 @@ defineExpose({ show, close })
 </script>
 
 <style scoped>
-.err-toast {
+.notif-toast {
   position: fixed;
   top: 18px;
   right: 18px;
   z-index: 9999;
-  min-width: 260px;
-  max-width: min(380px, calc(100vw - 36px));
+  min-width: 280px;
+  max-width: min(400px, calc(100vw - 36px));
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  backdrop-filter: blur(8px);
+  border: 1.5px solid;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+/* ── ERROR ── */
+.notif-toast--error {
+  background: rgba(140, 20, 20, 0.92);
+  border-color: rgba(255, 90, 90, 0.5);
+  color: #ffe0e0;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 13px 14px 13px 16px;
-  border-radius: 16px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  backdrop-filter: blur(6px);
-  border: 1.5px solid;
-  pointer-events: auto;
 }
 
-/* ── Types ── */
-.err-toast--error {
-  background: rgba(140, 20, 20, 0.88);
-  border-color: rgba(255, 90, 90, 0.5);
-  color: #ffe0e0;
-}
-.err-toast--warning {
-  background: rgba(120, 80, 0, 0.88);
+/* ── WARNING ── */
+.notif-toast--warning {
+  background: rgba(120, 80, 0, 0.92);
   border-color: rgba(255, 200, 50, 0.5);
   color: #fff3c0;
-}
-.err-toast--info {
-  background: rgba(10, 55, 110, 0.92);
-  border-color: rgba(100, 180, 255, 0.4);
-  color: #d0eaff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px 13px 16px;
 }
 
-/* ── Icon ── */
-.err-icon {
+/* ── INFO ── */
+.notif-toast--info {
+  background: rgba(10, 55, 110, 0.95);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: #d0eaff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px 13px 16px;
+}
+
+/* ── INVITATION ── */
+.notif-toast--invitation {
+  background: linear-gradient(160deg, #0a2a50 0%, #051428 100%);
+  border-color: rgba(100, 220, 120, 0.5);
+  color: #e0fff0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 10px 16px;
+}
+
+.inv-icon {
+  font-size: 30px;
+  color: #3ddc84;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(61, 220, 132, 0.5));
+  animation: invPulse 2s ease-in-out infinite;
+}
+
+@keyframes invPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.75; transform: scale(1.12); }
+}
+
+.inv-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.inv-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(61, 220, 132, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.inv-msg {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #e8fff5;
+  line-height: 1.4;
+}
+
+.inv-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px 14px;
+}
+
+.inv-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.inv-btn .material-icons { font-size: 17px; }
+
+.inv-btn:hover { filter: brightness(1.15); transform: scale(1.03); }
+.inv-btn:active { transform: scale(0.97); }
+
+.inv-btn-accept {
+  background: linear-gradient(135deg, rgba(43, 239, 122, 0.25), rgba(15, 168, 68, 0.15));
+  border: 1.5px solid rgba(43, 239, 122, 0.5);
+  color: #6cfa8e;
+  box-shadow: 0 4px 14px rgba(43, 200, 100, 0.2);
+}
+
+.inv-btn-decline {
+  background: linear-gradient(135deg, rgba(220, 80, 80, 0.18), rgba(160, 30, 30, 0.1));
+  border: 1.5px solid rgba(220, 80, 80, 0.4);
+  color: #ff8080;
+}
+
+/* ── Shared ── */
+.notif-icon {
   font-size: 22px;
   flex-shrink: 0;
   opacity: 0.9;
 }
 
-/* ── Message ── */
-.err-msg {
+.notif-msg {
   flex: 1;
   min-width: 0;
 }
 
-/* ── Close button ── */
-.err-close {
+.notif-close {
   background: none;
   border: none;
   cursor: pointer;
   padding: 2px;
   color: inherit;
-  opacity: 0.6;
+  opacity: 0.55;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -129,22 +274,20 @@ defineExpose({ show, close })
   border-radius: 50%;
   transition: opacity 0.2s, background 0.2s;
 }
-.err-close:hover {
+.notif-close:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.15);
 }
-.err-close .material-icons {
-  font-size: 17px;
-}
+.notif-close .material-icons { font-size: 17px; }
 
 /* ── Transition ── */
-.err-fade-enter-active,
-.err-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+.notif-fade-enter-active,
+.notif-fade-leave-active {
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
-.err-fade-enter-from,
-.err-fade-leave-to {
+.notif-fade-enter-from,
+.notif-fade-leave-to {
   opacity: 0;
-  transform: translateX(40px) scale(0.95);
+  transform: translateX(50px) scale(0.92);
 }
 </style>
