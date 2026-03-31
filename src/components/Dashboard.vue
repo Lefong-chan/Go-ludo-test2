@@ -86,7 +86,6 @@
     </div>
   </footer>
 
-  <!-- ── Modals ──────────────────────────────────────────────────── -->
   <ModalSocial
     :show="showSocial"
     @close="showSocial = false"
@@ -126,8 +125,13 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { initializeApp, getApps }      from 'firebase/app'
 import { getFirestore, doc, getDoc, onSnapshot } from 'firebase/firestore'
-
-import { usePresence } from '../composables/usePresence'
+import {
+  getDatabase,
+  ref      as dbRef,
+  set      as dbSet,
+  onDisconnect,
+  serverTimestamp,
+} from 'firebase/database'
 
 import ModalSocial   from '../components/modals/ModalSocial.vue'
 import ModalSettings from '../components/modals/ModalSettings.vue'
@@ -135,7 +139,6 @@ import ModalWallet   from '../components/modals/ModalWallet.vue'
 import ModalUsername from '../components/modals/ModalUsername.vue'
 import ModalProfile  from '../components/modals/ModalProfile.vue'
 
-// ── Firebase ──────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -147,11 +150,8 @@ const firebaseConfig = {
 }
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 const fsDb        = getFirestore(firebaseApp)
+const rtdb        = getDatabase(firebaseApp)
 
-// ── Presence (composable) ─────────────────────────────────────
-const { initMyPresence, destroyMyPresence } = usePresence()
-
-// ── State ─────────────────────────────────────────────────────
 const showSocial    = ref(false)
 const showSettings  = ref(false)
 const showWallet    = ref(false)
@@ -164,9 +164,22 @@ const wallet          = ref(0)
 const avatar          = ref('👤')
 const userFirebaseUid = ref('')
 
-let unsubscribe = null
+let unsubscribe   = null
+let myPresenceRef = null
 
-// ── onMounted ─────────────────────────────────────────────────
+const initMyPresence = async (uid) => {
+  if (!uid) return
+  myPresenceRef = dbRef(rtdb, `presence/${uid}`)
+  await onDisconnect(myPresenceRef).set({ online: false, lastSeen: serverTimestamp() })
+  await dbSet(myPresenceRef, { online: true, lastSeen: serverTimestamp() })
+}
+
+const destroyMyPresence = async () => {
+  if (!myPresenceRef) return
+  try { await dbSet(myPresenceRef, { online: false, lastSeen: serverTimestamp() }) } catch { }
+  myPresenceRef = null
+}
+
 onMounted(async () => {
   const savedUid         = localStorage.getItem('user_uid')
   const savedWallet      = localStorage.getItem('user_wallet')
@@ -195,17 +208,16 @@ onUnmounted(() => {
 })
 
 const handleBeforeUnload = () => {
-  // Presence handled by onDisconnect in usePresence
+  const token = localStorage.getItem('user_token')
+  if (!token || !myPresenceRef) return
 }
 
 const fetchUsernameFromFirestore = async (fbUid) => {
   try {
-    const userRef  = doc(fsDb, 'users', fbUid)
-    const snap     = await getDoc(userRef)
-
+    const userRef = doc(fsDb, 'users', fbUid)
+    const snap    = await getDoc(userRef)
     if (snap.exists()) {
       const data = snap.data()
-
       if (data.wallet !== undefined) {
         wallet.value = data.wallet
         localStorage.setItem('user_wallet', data.wallet)
@@ -214,11 +226,7 @@ const fetchUsernameFromFirestore = async (fbUid) => {
         avatar.value = data.avatar
         localStorage.setItem('user_avatar', data.avatar)
       }
-
-      const hasUsername = data.username &&
-                          data.username !== 'New Player' &&
-                          data.username.trim() !== ''
-
+      const hasUsername = data.username && data.username !== 'New Player' && data.username.trim() !== ''
       if (hasUsername) {
         username.value = data.username
         startFirestoreListener(fbUid)
@@ -231,10 +239,7 @@ const fetchUsernameFromFirestore = async (fbUid) => {
     }
   } catch {
     const savedUsername = localStorage.getItem('user_username')
-    const hasUsername   = savedUsername &&
-                          savedUsername !== 'New Player' &&
-                          savedUsername.trim() !== ''
-
+    const hasUsername   = savedUsername && savedUsername !== 'New Player' && savedUsername.trim() !== ''
     if (hasUsername) {
       username.value = savedUsername
       startFirestoreListener(fbUid)
@@ -244,7 +249,6 @@ const fetchUsernameFromFirestore = async (fbUid) => {
   }
 }
 
-// ── Firestore real-time listener ──────────────────────────────
 const startFirestoreListener = (fbUid) => {
   if (!fbUid || unsubscribe) return
   const userRef = doc(fsDb, 'users', fbUid)
@@ -268,25 +272,20 @@ const startFirestoreListener = (fbUid) => {
   })
 }
 
-// ── Callbacks ─────────────────────────────────────────────────
 const onUsernameSet = (newUsername) => {
   username.value     = newUsername
   localStorage.setItem('user_username', newUsername)
   showUsername.value = false
 }
 
-const onBadgeUpdate = (count) => {
-  console.log('Badge inbox:', count)
-}
+const onBadgeUpdate = (count) => { console.log('Badge inbox:', count) }
 
 const onProfileOpenSocial = () => {
   showProfile.value = false
   setTimeout(() => { showSocial.value = true }, 200)
 }
 
-const onAvatarUpdated = (newAvatar) => {
-  avatar.value = newAvatar
-}
+const onAvatarUpdated = (newAvatar) => { avatar.value = newAvatar }
 </script>
 
 <style>
@@ -339,7 +338,6 @@ body {
 #hdr-r { display: flex; align-items: center; gap: 10px; }
 
 .w-amount { font-size: 20px; font-weight: 700; color: var(--gold); }
-
 .h-l-icon { color: var(--gold); }
 
 .material-icons {
