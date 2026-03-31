@@ -2,7 +2,11 @@ const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
   const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  admin.initializeApp({
+    credential:  admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL ||
+                 'https://go-ludo-gascar-default-rtdb.europe-west1.firebasedatabase.app',
+  });
 }
 
 const db   = admin.firestore();
@@ -59,8 +63,10 @@ module.exports = async (req, res) => {
         }
       });
 
+      // onDisconnect: fafao ny player raha niala tsy nahandro
       await roomRef.child(`players/${myUid}`).onDisconnect().remove();
 
+      // Fandefasana invitation ao amin'ny target – vita amin'ny send-invite
       return res.status(200).json({ roomId });
     }
 
@@ -80,6 +86,7 @@ module.exports = async (req, res) => {
       if (targetFirebaseUid === myUid)
         return res.status(400).json({ message: 'Cannot invite yourself' });
 
+      // Manoratra invitation ao amin'ny RTDB (realtime) ho an'ilay target
       const inviteRef = rtdb.ref(`invitations/${targetFirebaseUid}`);
       await inviteRef.set({
         inviterUid:      myUid,
@@ -89,6 +96,7 @@ module.exports = async (req, res) => {
         status:          'pending',
       });
 
+      // onDisconnect: fafao ny invitation raha niala ilay inviter
       await inviteRef.onDisconnect().remove();
 
       return res.status(200).json({ message: 'Invitation sent.', roomId });
@@ -132,8 +140,10 @@ module.exports = async (req, res) => {
         slot:        currentPlayers,
       });
 
+      // onDisconnect: fafao ny player raha niala tsy nahandro
       await playerRef.onDisconnect().remove();
 
+      // Fafao ny invitation rehefa nanao join
       await rtdb.ref(`invitations/${myUid}`).remove();
 
       return res.status(200).json({ message: 'Joined room.', roomId });
@@ -154,6 +164,7 @@ module.exports = async (req, res) => {
       const playerRef = rtdb.ref(`rooms/${roomId}/players/${myUid}`);
       await playerRef.remove();
 
+      // Ra tsy misy olona intsony dia fafao ny room
       const playersSnap = await rtdb.ref(`rooms/${roomId}/players`).once('value');
       if (!playersSnap.exists() || Object.keys(playersSnap.val() || {}).length === 0) {
         await rtdb.ref(`rooms/${roomId}`).remove();
@@ -192,10 +203,11 @@ module.exports = async (req, res) => {
     // POST /api/room?action=decline-invite
     // Headers: Authorization: Bearer <idToken>
     // body: { inviterUid }
+    // Antsoina rehefa mandaha na mikatona ilay modal ny olona
     // ════════════════════════════════════════════════════════════
     if (action === 'decline-invite') {
       const myUid = await verifyToken(req);
-      
+      // Fafao ny invitation avy amin'ny RTDB
       await rtdb.ref(`invitations/${myUid}`).remove();
       return res.status(200).json({ message: 'Invitation declined.' });
     }
