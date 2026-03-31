@@ -20,104 +20,114 @@
     </div>
   </header>
 
-  <main id="main">
-    <div id="logo-wrap">
-      <img class="logo-img" src="../assets/images/logo/Go_Ludo.png" alt="Go Ludo Mada Logo">
-    </div>
+  <!-- Loading screen rehefa mbola manamarina session -->
+  <div v-if="isCheckingSession" id="session-loading">
+    <div class="session-spinner"></div>
+    <p class="session-text">Checking session…</p>
+  </div>
 
-    <div id="btns">
+  <template v-else>
 
-      <div class="mbtn mbtn-g" @click="showSocial = true" role="button">
-        <div class="btn-diamond">
-          <img src="../assets/images/buttons/icons/000000005.png" style="width: 145px" alt="Friends Icon">
-        </div>
-        <div class="btn-label">
-          <span class="btn-title">Friends</span>
-          <span class="btn-sub">Invite others</span>
-        </div>
+    <main id="main">
+      <div id="logo-wrap">
+        <img class="logo-img" src="../assets/images/logo/Go_Ludo.png" alt="Go Ludo Mada Logo">
       </div>
 
-      <div class="mbtn mbtn-p" role="button">
-        <div class="btn-diamond">
-          <img src="../assets/images/buttons/icons/1209849.png" alt="Multiplayer Icon">
+      <div id="btns">
+
+        <div class="mbtn mbtn-g" @click="showSocial = true" role="button">
+          <div class="btn-diamond">
+            <img src="../assets/images/buttons/icons/000000005.png" style="width: 145px" alt="Friends Icon">
+          </div>
+          <div class="btn-label">
+            <span class="btn-title">Friends</span>
+            <span class="btn-sub">Invite others</span>
+          </div>
         </div>
-        <div class="btn-label">
-          <span class="btn-title">Multiplayer</span>
-          <span class="btn-sub">Auto match</span>
+
+        <div class="mbtn mbtn-p" role="button">
+          <div class="btn-diamond">
+            <img src="../assets/images/buttons/icons/1209849.png" alt="Multiplayer Icon">
+          </div>
+          <div class="btn-label">
+            <span class="btn-title">Multiplayer</span>
+            <span class="btn-sub">Auto match</span>
+          </div>
+        </div>
+
+        <div class="mbtn mbtn-y" role="button">
+          <div class="btn-diamond">
+            <img src="../assets/images/buttons/icons/8193229.png" alt="Create Table Icon">
+          </div>
+          <div class="btn-label">
+            <span class="btn-title">Create Game</span>
+            <span class="btn-sub">New table</span>
+          </div>
+        </div>
+
+        <div class="mbtn mbtn-b" role="button">
+          <div class="btn-diamond">
+            <img src="../assets/images/buttons/icons/dice-clip-art-clkerm-vector-clip-art-online-royalty-domain-18.png" alt="Lobby Icon">
+          </div>
+          <div class="btn-label">
+            <span class="btn-title">Public Lobby</span>
+            <span class="btn-sub">Join game</span>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <footer id="footer">
+      <div id="profile-info">
+        <div id="ava" role="img" aria-label="User Avatar">{{ avatar }}</div>
+        <div>
+          <div id="uname">{{ username }}</div>
+          <div id="uid">ID: {{ userUid }}</div>
         </div>
       </div>
-
-      <div class="mbtn mbtn-y" role="button">
-        <div class="btn-diamond">
-          <img src="../assets/images/buttons/icons/8193229.png" alt="Create Table Icon">
-        </div>
-        <div class="btn-label">
-          <span class="btn-title">Create Game</span>
-          <span class="btn-sub">New table</span>
+      <div id="btn-stats" role="button" tabindex="0" @click="showProfile = true">
+        <div style="display: flex; align-items: center; gap: 5px;">
+          <span class="material-icons" style="font-size: 18px;">leaderboard</span>
+          <span>Stats</span>
         </div>
       </div>
+    </footer>
 
-      <div class="mbtn mbtn-b" role="button">
-        <div class="btn-diamond">
-          <img src="../assets/images/buttons/icons/dice-clip-art-clkerm-vector-clip-art-online-royalty-domain-18.png" alt="Lobby Icon">
-        </div>
-        <div class="btn-label">
-          <span class="btn-title">Public Lobby</span>
-          <span class="btn-sub">Join game</span>
-        </div>
-      </div>
+    <ModalSocial
+      :show="showSocial"
+      @close="showSocial = false"
+      @update-badge="onBadgeUpdate"
+    />
 
-    </div>
-  </main>
+    <ModalSettings
+      :show="showSettings"
+      @close="showSettings = false"
+    />
 
-  <footer id="footer">
-    <div id="profile-info">
-      <div id="ava" role="img" aria-label="User Avatar">{{ avatar }}</div>
-      <div>
-        <div id="uname">{{ username }}</div>
-        <div id="uid">ID: {{ userUid }}</div>
-      </div>
-    </div>
-    <div id="btn-stats" role="button" tabindex="0" @click="showProfile = true">
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <span class="material-icons" style="font-size: 18px;">leaderboard</span>
-        <span>Stats</span>
-      </div>
-    </div>
-  </footer>
+    <ModalWallet
+      :show="showWallet"
+      @close="showWallet = false"
+    />
 
-  <ModalSocial
-    :show="showSocial"
-    @close="showSocial = false"
-    @update-badge="onBadgeUpdate"
-  />
+    <ModalUsername
+      :show="showUsername"
+      :user-firebase-uid="userFirebaseUid"
+      @username-set="onUsernameSet"
+    />
 
-  <ModalSettings
-    :show="showSettings"
-    @close="showSettings = false"
-  />
+    <ModalProfile
+      :show="showProfile"
+      :username="username"
+      :user-uid="userUid"
+      :wallet="wallet"
+      :avatar="avatar"
+      @close="showProfile = false"
+      @open-social="onProfileOpenSocial"
+      @avatar-updated="onAvatarUpdated"
+    />
 
-  <ModalWallet
-    :show="showWallet"
-    @close="showWallet = false"
-  />
-
-  <ModalUsername
-    :show="showUsername"
-    :user-firebase-uid="userFirebaseUid"
-    @username-set="onUsernameSet"
-  />
-
-  <ModalProfile
-    :show="showProfile"
-    :username="username"
-    :user-uid="userUid"
-    :wallet="wallet"
-    :avatar="avatar"
-    @close="showProfile = false"
-    @open-social="onProfileOpenSocial"
-    @avatar-updated="onAvatarUpdated"
-  />
+  </template>
 
 </template>
 
@@ -139,6 +149,11 @@ import ModalWallet   from '../components/modals/ModalWallet.vue'
 import ModalUsername from '../components/modals/ModalUsername.vue'
 import ModalProfile  from '../components/modals/ModalProfile.vue'
 
+// ─── Emit ────────────────────────────────────────────────────────────────────
+
+const emit = defineEmits(['logout'])
+
+// ─── Firebase ────────────────────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -151,6 +166,9 @@ const firebaseConfig = {
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 const fsDb        = getFirestore(firebaseApp)
 const rtdb        = getDatabase(firebaseApp)
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const isCheckingSession = ref(true)
 
 const showSocial    = ref(false)
 const showSettings  = ref(false)
@@ -167,6 +185,7 @@ const userFirebaseUid = ref('')
 let unsubscribe   = null
 let myPresenceRef = null
 
+// ─── Presence ────────────────────────────────────────────────────────────────
 const initMyPresence = async (uid) => {
   if (!uid) return
   myPresenceRef = dbRef(rtdb, `presence/${uid}`)
@@ -180,36 +199,117 @@ const destroyMyPresence = async () => {
   myPresenceRef = null
 }
 
-onMounted(async () => {
-  const savedUid         = localStorage.getItem('user_uid')
-  const savedWallet      = localStorage.getItem('user_wallet')
-  const savedFirebaseUid = localStorage.getItem('user_firebase_uid')
-  const savedAvatar      = localStorage.getItem('user_avatar')
+const forceLogout = () => {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null }
+  destroyMyPresence()
+  localStorage.removeItem('user_token')
+  localStorage.removeItem('user_refresh_token')
+  localStorage.removeItem('user_uid')
+  localStorage.removeItem('user_firebase_uid')
+  localStorage.removeItem('user_wallet')
+  localStorage.removeItem('user_username')
+  localStorage.removeItem('user_avatar')
+  emit('logout')
+}
 
-  if (savedUid)         userUid.value         = savedUid
-  if (savedWallet)      wallet.value          = savedWallet
-  if (savedFirebaseUid) userFirebaseUid.value = savedFirebaseUid
-  if (savedAvatar)      avatar.value          = savedAvatar
+// ─── Refresh token ────────────────────────────────────────────────────────────
 
-  if (savedFirebaseUid) {
-    await fetchUsernameFromFirestore(savedFirebaseUid)
-    initMyPresence(savedFirebaseUid)
-  } else {
-    showUsername.value = true
+const tryRefreshToken = async () => {
+  const refreshToken = localStorage.getItem('user_refresh_token')
+  if (!refreshToken) return null
+
+  try {
+    const res = await fetch('/api/session?action=refresh-token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ refreshToken }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data.token) return null
+
+    localStorage.setItem('user_token',         data.token)
+    localStorage.setItem('user_refresh_token', data.refreshToken || refreshToken)
+    return data.token
+  } catch {
+    return null
+  }
+}
+
+// ─── Session check ────────────────────────────────────────────────────────────
+
+const checkSession = async () => {
+  let token = localStorage.getItem('user_token')
+
+  if (!token) {
+    forceLogout()
+    return
   }
 
-  window.addEventListener('beforeunload', handleBeforeUnload)
-})
+  let sessionData = null
 
-onUnmounted(() => {
-  if (unsubscribe) unsubscribe()
-  window.removeEventListener('beforeunload', handleBeforeUnload)
-  destroyMyPresence()
-})
+  try {
+    const res = await fetch('/api/session?action=check-session', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
 
-const handleBeforeUnload = () => {
-  const token = localStorage.getItem('user_token')
-  if (!token || !myPresenceRef) return
+    if (res.ok) {
+      sessionData = await res.json()
+    } else if (res.status === 401) {
+
+      token = await tryRefreshToken()
+      if (!token) {
+        forceLogout()
+        return
+      }
+
+      const res2 = await fetch('/api/session?action=check-session', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (res2.ok) {
+        sessionData = await res2.json()
+      } else {
+        forceLogout()
+        return
+      }
+    } else {
+
+      forceLogout()
+      return
+    }
+  } catch {
+
+    const fbUid = localStorage.getItem('user_firebase_uid')
+    if (!fbUid) { forceLogout(); return }
+    userFirebaseUid.value = fbUid
+    userUid.value         = localStorage.getItem('user_uid')         || '000000000'
+    wallet.value          = localStorage.getItem('user_wallet')      || 0
+    avatar.value          = localStorage.getItem('user_avatar')      || '👤'
+    const savedUsername   = localStorage.getItem('user_username')    || ''
+    if (savedUsername && savedUsername !== 'New Player') {
+      username.value = savedUsername
+    } else {
+      showUsername.value = true
+    }
+    isCheckingSession.value = false
+    initMyPresence(fbUid)
+    return
+  }
+
+  const fbUid = sessionData.firebaseUid
+  userFirebaseUid.value = fbUid
+  userUid.value         = sessionData.uid      || localStorage.getItem('user_uid') || '000000000'
+  wallet.value          = sessionData.wallet   ?? 0
+  avatar.value          = localStorage.getItem('user_avatar') || '👤'
+
+  localStorage.setItem('user_firebase_uid', fbUid)
+  localStorage.setItem('user_uid',          userUid.value)
+  localStorage.setItem('user_wallet',       wallet.value)
+
+  await fetchUsernameFromFirestore(fbUid)
+  initMyPresence(fbUid)
+
+  isCheckingSession.value = false
 }
 
 const fetchUsernameFromFirestore = async (fbUid) => {
@@ -249,6 +349,7 @@ const fetchUsernameFromFirestore = async (fbUid) => {
   }
 }
 
+// ─── Firestore listener ───────────────────────────────────────────────────────
 const startFirestoreListener = (fbUid) => {
   if (!fbUid || unsubscribe) return
   const userRef = doc(fsDb, 'users', fbUid)
@@ -272,6 +373,23 @@ const startFirestoreListener = (fbUid) => {
   })
 }
 
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  await checkSession()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  if (unsubscribe) unsubscribe()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  destroyMyPresence()
+})
+
+const handleBeforeUnload = () => {
+  destroyMyPresence()
+}
+
+// ─── Handlers ─────────────────────────────────────────────────────────────────
 const onUsernameSet = (newUsername) => {
   username.value     = newUsername
   localStorage.setItem('user_username', newUsername)
@@ -322,6 +440,34 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Session loading screen ─────────────────────────────────── */
+#session-loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.session-spinner {
+  width: 44px; height: 44px;
+  border: 3px solid rgba(255, 217, 102, 0.15);
+  border-top-color: #ffd966;
+  border-radius: 50%;
+  animation: sessionSpin 0.75s linear infinite;
+}
+@keyframes sessionSpin {
+  to { transform: rotate(360deg); }
+}
+
+.session-text {
+  font-size: 13px;
+  color: rgba(255, 245, 200, 0.4);
+  letter-spacing: 0.05em;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
 #hdr {
   position: fixed; top: 0; left: 0; right: 0;
   z-index: 200; height: var(--bar-h);
@@ -424,6 +570,7 @@ body {
 .mbtn-y .btn-diamond { background: linear-gradient(135deg, #2bef7a, #0fa844); }
 .mbtn-y .btn-label   { background: linear-gradient(to bottom, #1a6b38, #0d3d20); }
 
+/* ── Footer ──────────────────────────────────────────────────── */
 #footer {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: var(--bar-h);
