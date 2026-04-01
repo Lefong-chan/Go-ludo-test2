@@ -35,11 +35,13 @@
                   <!--
                     isHost  = nanao invitation = miseho + (afaka manoso invitation)
                     isGuest = nandray invitation = miseho Waiting
+                    playersLoaded = miandry aloha ny data RTDB vao miseho
                   -->
-                  <button v-if="isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
                     <span class="material-icons">add</span>
                   </button>
-                  <span v-else class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else class="slot-empty-icon material-icons" style="opacity:0.1;">hourglass_empty</span>
                 </template>
               </div>
               <div class="slot-name">
@@ -67,10 +69,11 @@
                   <div class="slot-avatar">{{ players[1].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
                     <span class="material-icons">add</span>
                   </button>
-                  <span v-else class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else class="slot-empty-icon material-icons" style="opacity:0.1;">hourglass_empty</span>
                 </template>
               </div>
               <div class="slot-name">
@@ -97,10 +100,11 @@
                   <div class="slot-avatar">{{ players[2].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
                     <span class="material-icons">add</span>
                   </button>
-                  <span v-else class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else class="slot-empty-icon material-icons" style="opacity:0.1;">hourglass_empty</span>
                 </template>
               </div>
               <div class="slot-name">
@@ -127,10 +131,11 @@
                   <div class="slot-avatar">{{ players[3].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
                     <span class="material-icons">add</span>
                   </button>
-                  <span v-else class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
+                  <span v-else class="slot-empty-icon material-icons" style="opacity:0.1;">hourglass_empty</span>
                 </template>
               </div>
               <div class="slot-name">
@@ -164,6 +169,10 @@
             <!--
               HOST (nanao invitation)  → START GAME
               GUEST (nandray invitation) → Ready / Not Ready
+              Label = state ankehitriny (tsy action):
+                myReady=true  → miseho "Ready"    (maitso) = hita fa ready izy
+                myReady=false → miseho "Not Ready" (mena)   = hita fa tsy ready
+              Manindry = manova ny state (toggle)
             -->
 
             <button
@@ -184,11 +193,11 @@
             <button
               v-else
               class="room-btn"
-              :class="myReady ? 'room-btn-notready' : 'room-btn-ready'"
+              :class="myReady ? 'room-btn-ready' : 'room-btn-notready'"
               @click="toggleReady"
             >
-              <span class="material-icons">{{ myReady ? 'close' : 'check_circle' }}</span>
-              {{ myReady ? 'Not Ready' : 'Ready' }}
+              <span class="material-icons">{{ myReady ? 'check_circle' : 'close' }}</span>
+              {{ myReady ? 'Ready' : 'Not Ready' }}
             </button>
 
           </div>
@@ -210,7 +219,7 @@
       @confirm="doLeave"
     />
 
-    <!-- ── ModalSocial: invitation depuis la room ── -->
+    <!-- ── ModalSocial: invitation depuis la room (z-index 6000 > ModalRoom 5000) ── -->
     <ModalSocial
       :show="showInviteModal"
       :my-firebase-uid="myUid"
@@ -277,6 +286,7 @@ const emit = defineEmits(['close', 'game-start'])
 const localVisible    = ref(false)
 const closing         = ref(false)
 const players         = ref([null, null, null, null])
+const playersLoaded   = ref(false)
 const isStarting      = ref(false)
 const confirmLeave    = ref(false)
 const isLeaving       = ref(false)
@@ -286,20 +296,12 @@ const dissolvedMsg    = ref('')
 // ── Computed ───────────────────────────────────────────────────
 const activePlayers = computed(() => players.value.filter(Boolean).length)
 
-/**
- * isHost  = ilay nanao invitation (olona voalohany tafiditra ao amin'ny room)
- *         → miseho + button eo amin'ny slots banga
- *         → miseho START GAME button
- * isGuest = ilay nandray invitation
- *         → miseho hourglass (Waiting) eo amin'ny slots banga
- *         → miseho Ready / Not Ready button
- */
 const isHost = computed(() => {
   const first = players.value.find(Boolean)
-  return first?.firebaseUid === props.myUid
+  if (!first) return false
+  return first.firebaseUid === props.myUid
 })
 
-// Misy Guest Not Ready? (Host tsy isaina)
 const hasNotReady = computed(() => {
   const hostUid = players.value.find(Boolean)?.firebaseUid
   return players.value
@@ -308,7 +310,6 @@ const hasNotReady = computed(() => {
     .some(p => !p.ready)
 })
 
-// Status Ready an'ity utilisateur ity
 const myReady = computed(() => {
   const me = players.value.find(p => p?.firebaseUid === props.myUid)
   return !!me?.ready
@@ -331,14 +332,11 @@ let unsubRoom = null
 const startRoomListener = () => {
   if (!props.roomId) return
 
-  // Mihaino ny room manontolo (tsy players ihany)
-  // mba hahita raha voafafa ny room (Host niala)
   roomRef = dbRef(rtdb, `rooms/${props.roomId}`)
 
   const handler = (snap) => {
     const roomData = snap.val()
 
-    // Room voafafa → Guest manaiky notification ary mikatona
     if (!roomData) {
       if (!isHost.value) {
         const hostName = players.value.find(Boolean)?.username || 'The host'
@@ -353,7 +351,8 @@ const startRoomListener = () => {
     Object.values(data).forEach((p, i) => {
       if (i < 4) slots[i] = { ...p, isMe: p.firebaseUid === props.myUid }
     })
-    players.value = slots
+    players.value      = slots
+    playersLoaded.value = true
   }
 
   onValue(roomRef, handler)
@@ -394,10 +393,8 @@ const leaveRoom = async () => {
   if (!props.roomId || !props.myUid) return
   try {
     if (isHost.value) {
-      // Host (nanao invitation) miala → mafaho room manontolo → ejected avokoa ny guests
       await remove(dbRef(rtdb, `rooms/${props.roomId}`))
     } else {
-      // Guest (nandray invitation) miala → izy irery no esorina
       const playerRef = dbRef(rtdb, `rooms/${props.roomId}/players/${props.myUid}`)
       await remove(playerRef)
       const playersSnap = await new Promise(resolve => {
@@ -416,7 +413,6 @@ const askLeave = () => { confirmLeave.value = true }
 
 const doLeave = async () => {
   isLeaving.value = true
-  // Atsahatra aloha ny listener mba tsy hampiasa ilay "room deleted" handler
   stopRoomListener()
   await leaveRoom()
   isLeaving.value    = false
@@ -449,11 +445,12 @@ const startGame = async () => {
 // ── Watch show ────────────────────────────────────────────────
 watch(() => props.show, async (val) => {
   if (val) {
-    localVisible.value = true
-    closing.value      = false
-    isStarting.value   = false
-    dissolvedMsg.value = ''
-    players.value      = [null, null, null, null]
+    localVisible.value  = true
+    closing.value       = false
+    isStarting.value    = false
+    dissolvedMsg.value  = ''
+    players.value       = [null, null, null, null]
+    playersLoaded.value = false
     document.body.style.overflow = 'hidden'
     startRoomListener()
     await joinRoom()
@@ -684,11 +681,15 @@ onUnmounted(() => stopRoomListener())
   font-size: 10px; font-weight: 600; opacity: .6;
   text-transform: none; letter-spacing: 0;
 }
+
+/* Ready = maitso (state ankehitriny: ready izy) */
 .room-btn-ready {
   background: linear-gradient(135deg, rgba(43,239,122,.2), rgba(15,168,68,.1));
   border: 1.5px solid rgba(43,239,122,.4);
   color: #3ddc84;
 }
+
+/* Not Ready = mena (state ankehitriny: tsy ready izy) */
 .room-btn-notready {
   background: linear-gradient(135deg, rgba(220,80,70,.15), rgba(160,30,30,.08));
   border: 1.5px solid rgba(220,80,70,.35);
