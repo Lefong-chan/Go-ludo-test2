@@ -861,6 +861,46 @@ const acceptRequest = async (f) => {
 }
 
 const declineRequest  = f => apiCall('decline-'   + f.firebaseUid, 'decline-request', { requesterFirebaseUid: f.firebaseUid })
+// ── Mihaino Firebase raha nanaiky ny invitation (eo amin'ny room/players) ──
+// pendingRooms[roomId] = { uid, unsub }  — miandry confirmation
+const pendingRooms = ref({})
+
+const waitForAccept = (roomId, invitedUid) => {
+  if (pendingRooms.value[roomId]) return // efa miandry
+
+  const r = dbRef(rtdb, `rooms/${roomId}/players`)
+  const handler = (snap) => {
+    const data = snap.val()
+    if (!data) {
+      // Room voafafa (tsy nanaiky na niala) — fafao ny pending
+      cleanPendingRoom(roomId)
+      return
+    }
+    // Raha tafiditra ilay olona nandefa invitation → misokatra ModalRoom
+    const accepted = Object.values(data).some(p => p.firebaseUid === invitedUid)
+    if (accepted) {
+      cleanPendingRoom(roomId)
+      emit('open-room', roomId)
+    }
+  }
+  onValue(r, handler)
+  const unsub = () => off(r, 'value', handler)
+
+  pendingRooms.value = { ...pendingRooms.value, [roomId]: { uid: invitedUid, unsub } }
+}
+
+const cleanPendingRoom = (roomId) => {
+  const entry = pendingRooms.value[roomId]
+  if (entry?.unsub) entry.unsub()
+  const updated = { ...pendingRooms.value }
+  delete updated[roomId]
+  pendingRooms.value = updated
+}
+
+const cleanAllPendingRooms = () => {
+  Object.keys(pendingRooms.value).forEach(cleanPendingRoom)
+}
+
 const challengeFriend = async (f) => {
   const uid = f.firebaseUid
   // Raha mbola anaty countdown → tsy afaka manao fanindroany
@@ -872,8 +912,9 @@ const challengeFriend = async (f) => {
     const token = localStorage.getItem('user_token')
     let roomId = props.roomId
 
-    // Raha tsy eo amin'ny room-invite-mode dia mamorona room vaovao
+    // ── Mode normal (avy amin'ny ModalSocial mahazatra) ──
     if (!props.roomInviteMode) {
+      // 1. Mamorona room vaovao
       const createRes = await fetch('/api/room?action=create-room', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -885,27 +926,32 @@ const challengeFriend = async (f) => {
       if (!createRes.ok) { showError(createData.message || 'Could not create room.'); return }
       roomId = createData.roomId
       if (!roomId) { showError('Invalid room ID returned.'); return }
-    }
 
-    // Mandefitra invitation
-    await fetch('/api/room?action=send-invite', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body:    JSON.stringify({
-        targetFirebaseUid: uid,
-        roomId,
-        inviterUsername:   props.myUsername,
-      }),
-    })
+      // 2. Mandefitra invitation
+      await fetch('/api/room?action=send-invite', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
+      })
 
-    // Manomboka countdown eo amin'ny button
-    startCountdown(uid)
+      // 3. Manomboka countdown eo amin'ny button
+      startCountdown(uid)
 
-    // Manokatra ModalRoom ho an'ilay nanao challenge (raha tsy eo amin'ny room-invite-mode)
-    if (!props.roomInviteMode) {
-      emit('open-room', roomId)
+      // 4. Miandry confirmation aloha — ModalRoom tsy misokatra raha tsy nanaiky ilay olona
+      //    (waitForAccept → emit('open-room') rehefa tafiditra ilay olona ao amin'ny room)
+      waitForAccept(roomId, uid)
+
     } else {
-      // Ao amin'ny room-invite-mode: mikatona ModalSocial rehefa vita ny invitation
+      // ── Room-invite-mode (avy amin'ny ModalRoom mandeha) ──
+      // Mandefitra invitation fotsiny — ny Host efa ao amin'ny ModalRoom
+      await fetch('/api/room?action=send-invite', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
+      })
+      // Manomboka countdown eo amin'ny button
+      startCountdown(uid)
+      // Mikatona ModalSocial rehefa vita
       emit('close')
     }
   } catch (e) {
@@ -941,6 +987,8 @@ onUnmounted(() => {
   stopFriendsListener()
   // Fafao ny countdown timers rehetra
   Object.keys(countdowns.value).forEach(uid => stopCountdown(uid))
+  // Fafao ny pending room listeners rehetra
+  cleanAllPendingRooms()
 })
 const handleClose = () => emit('close')
 </script>
