@@ -1,7 +1,9 @@
 <template>
+  <Teleport to="body">
   <div
     v-if="localVisible"
     :class="['ovl', closing ? 'off' : 'on']"
+    :style="roomInviteMode ? { zIndex: 6000 } : {}"
     id="modal-social"
     @click.self="handleClose"
   >
@@ -422,6 +424,7 @@
     @remove-friend="onProfileRemove"
     @challenge="onProfileChallenge"
   />
+  </Teleport>
 </template>
 
 <script setup>
@@ -511,7 +514,7 @@ const showError = (msg, type = 'error') => {
   setTimeout(() => { errorMsg.value = msg; errorType.value = type }, 50)
 }
 
-// ── Confirm: famafa amis ───────────────────────────────────────
+// ── Confirm ───────────────────────────────────────
 const confirmRemove  = reactive({ visible: false, user: null, username: '', loading: false })
 const confirmDecline = reactive({ visible: false, user: null, username: '', loading: false })
 
@@ -570,12 +573,11 @@ const openPlayerProfile = (user) => {
   playerProfileVisible.value = true
 }
 
-// Callbacks avy amin'ny ModalProfile viewer
+// Callbacks
 const onProfileAccept = async (firebaseUid) => {
   const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
     || searchResults.value.find(p => p.firebaseUid === firebaseUid)
   if (user) await acceptRequest(user)
-  // Hanavaozina ny data ao amin'ny playerProfileData
   if (playerProfileData.value?.firebaseUid === firebaseUid) {
     playerProfileData.value = {
       ...playerProfileData.value,
@@ -607,7 +609,6 @@ const onProfileChallenge = async (firebaseUid) => {
   const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
     || searchResults.value.find(p => p.firebaseUid === firebaseUid)
   if (user) {
-    // Mikatona ModalProfile aloha automatique
     playerProfileVisible.value = false
     await challengeFriend(user)
   }
@@ -697,7 +698,7 @@ const subscribePresence = (uid) => {
       ...presenceMap.value,
       [uid]: val ? { online: !!val.online, lastSeen: val.lastSeen ?? null } : { online: false, lastSeen: null },
     }
-    // Hanavaozina ny playerProfileData raha ilay olona no sokafana
+
     if (playerProfileData.value?.firebaseUid === uid) {
       playerProfileData.value = {
         ...playerProfileData.value,
@@ -783,7 +784,7 @@ const startFriendsListener = () => {
     allFriends.value       = newList
     isLoadingFriends.value = false
     emit('update-badge', inbox.value.length)
-    // Hanavaozina ny relationship status ao amin'ny viewer profile raha misokatra
+
     if (playerProfileData.value) {
       const uid = playerProfileData.value.firebaseUid
       playerProfileData.value = {
@@ -814,7 +815,6 @@ const doSearch = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message)
     searchResults.value = data.results || []
-    // Subscribe presence an'ireo results
     searchResults.value.forEach(p => subscribePresence(p.firebaseUid))
   } catch { searchResults.value = [] }
   finally { searchDone.value = true; isSearching.value = false }
@@ -861,22 +861,20 @@ const acceptRequest = async (f) => {
 }
 
 const declineRequest  = f => apiCall('decline-'   + f.firebaseUid, 'decline-request', { requesterFirebaseUid: f.firebaseUid })
-// ── Mihaino Firebase raha nanaiky ny invitation (eo amin'ny room/players) ──
-// pendingRooms[roomId] = { uid, unsub }  — miandry confirmation
+
 const pendingRooms = ref({})
 
 const waitForAccept = (roomId, invitedUid) => {
-  if (pendingRooms.value[roomId]) return // efa miandry
+  if (pendingRooms.value[roomId]) return
 
   const r = dbRef(rtdb, `rooms/${roomId}/players`)
   const handler = (snap) => {
     const data = snap.val()
     if (!data) {
-      // Room voafafa (tsy nanaiky na niala) — fafao ny pending
       cleanPendingRoom(roomId)
       return
     }
-    // Raha tafiditra ilay olona nandefa invitation → misokatra ModalRoom
+
     const accepted = Object.values(data).some(p => p.firebaseUid === invitedUid)
     if (accepted) {
       cleanPendingRoom(roomId)
@@ -903,7 +901,7 @@ const cleanAllPendingRooms = () => {
 
 const challengeFriend = async (f) => {
   const uid = f.firebaseUid
-  // Raha mbola anaty countdown → tsy afaka manao fanindroany
+
   if (getCountdown(uid) !== null) return
 
   const key = 'challenge-' + uid
@@ -912,9 +910,7 @@ const challengeFriend = async (f) => {
     const token = localStorage.getItem('user_token')
     let roomId = props.roomId
 
-    // ── Mode normal (avy amin'ny ModalSocial mahazatra) ──
     if (!props.roomInviteMode) {
-      // 1. Mamorona room vaovao
       const createRes = await fetch('/api/room?action=create-room', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -927,31 +923,23 @@ const challengeFriend = async (f) => {
       roomId = createData.roomId
       if (!roomId) { showError('Invalid room ID returned.'); return }
 
-      // 2. Mandefitra invitation
       await fetch('/api/room?action=send-invite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
       })
 
-      // 3. Manomboka countdown eo amin'ny button
       startCountdown(uid)
 
-      // 4. Miandry confirmation aloha — ModalRoom tsy misokatra raha tsy nanaiky ilay olona
-      //    (waitForAccept → emit('open-room') rehefa tafiditra ilay olona ao amin'ny room)
       waitForAccept(roomId, uid)
 
     } else {
-      // ── Room-invite-mode (avy amin'ny ModalRoom mandeha) ──
-      // Mandefitra invitation fotsiny — ny Host efa ao amin'ny ModalRoom
       await fetch('/api/room?action=send-invite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
       })
-      // Manomboka countdown eo amin'ny button
       startCountdown(uid)
-      // Mikatona ModalSocial rehefa vita
       emit('close')
     }
   } catch (e) {
@@ -985,9 +973,7 @@ watch(() => props.show, val => {
 
 onUnmounted(() => {
   stopFriendsListener()
-  // Fafao ny countdown timers rehetra
   Object.keys(countdowns.value).forEach(uid => stopCountdown(uid))
-  // Fafao ny pending room listeners rehetra
   cleanAllPendingRooms()
 })
 const handleClose = () => emit('close')
