@@ -72,7 +72,7 @@
             </div>
             <div class="fa">
               <button
-                v-if="getPresence(f.firebaseUid).online"
+                v-if="getPresence(f.firebaseUid).online && !isInRoom(f.firebaseUid)"
                 class="fb fb-i"
                 style="min-width:84px;"
                 :class="{ 'btn-loading': loadingBtn === 'challenge-' + f.firebaseUid }"
@@ -82,6 +82,15 @@
                 <span v-if="loadingBtn === 'challenge-' + f.firebaseUid" class="btn-spin btn-spin-gold"></span>
                 <span v-else-if="getCountdown(f.firebaseUid) !== null" class="btn-countdown">{{ getCountdown(f.firebaseUid) }}</span>
                 <span v-else>Challenge</span>
+              </button>
+              <button
+                v-else-if="getPresence(f.firebaseUid).online && isInRoom(f.firebaseUid)"
+                class="fb fb-inroom"
+                style="min-width:84px;"
+                disabled
+              >
+                <span class="material-icons" style="font-size:12px;">meeting_room</span>
+                In Room
               </button>
               <button v-else class="fb fb-i" style="min-width:84px;" @click.stop="openPlayerProfile(f)">
                 View Profile
@@ -238,7 +247,7 @@
               View Profile
             </button>
             <button
-              v-if="popup.user && getPresence(popup.user.firebaseUid).online"
+              v-if="popup.user && getPresence(popup.user.firebaseUid).online && !isInRoom(popup.user.firebaseUid)"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
               :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
@@ -252,6 +261,14 @@
                 <span class="material-icons">sports_esports</span>
                 Challenge
               </template>
+            </button>
+            <button
+              v-else-if="popup.user && getPresence(popup.user.firebaseUid).online && isInRoom(popup.user.firebaseUid)"
+              class="pop-btn pop-inroom"
+              disabled
+            >
+              <span class="material-icons">meeting_room</span>
+              In Room
             </button>
             <button class="pop-btn pop-remove" @click="askRemove(popup.user)">
               <span class="material-icons">person_remove</span>
@@ -270,7 +287,7 @@
               View Profile
             </button>
             <button
-              v-if="popup.user && getPresence(popup.user.firebaseUid).online"
+              v-if="popup.user && getPresence(popup.user.firebaseUid).online && !isInRoom(popup.user.firebaseUid)"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
               :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
@@ -284,6 +301,14 @@
                 <span class="material-icons">sports_esports</span>
                 Challenge
               </template>
+            </button>
+            <button
+              v-else-if="popup.user && getPresence(popup.user.firebaseUid).online && isInRoom(popup.user.firebaseUid)"
+              class="pop-btn pop-inroom"
+              disabled
+            >
+              <span class="material-icons">meeting_room</span>
+              In Room
             </button>
             <button class="pop-btn pop-accept"
               :class="{ 'btn-loading': loadingBtn === 'accept-' + popup.user?.firebaseUid }"
@@ -314,7 +339,7 @@
               View Profile
             </button>
             <button
-              v-if="popup.user && getPresence(popup.user.firebaseUid).online"
+              v-if="popup.user && getPresence(popup.user.firebaseUid).online && !isInRoom(popup.user.firebaseUid)"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
               :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
@@ -328,6 +353,14 @@
                 <span class="material-icons">sports_esports</span>
                 Challenge
               </template>
+            </button>
+            <button
+              v-else-if="popup.user && getPresence(popup.user.firebaseUid).online && isInRoom(popup.user.firebaseUid)"
+              class="pop-btn pop-inroom"
+              disabled
+            >
+              <span class="material-icons">meeting_room</span>
+              In Room
             </button>
             <button
               v-if="popup.user && !isFriend(popup.user.firebaseUid) && !isPendingSent(popup.user.firebaseUid) && !isPendingReceived(popup.user.firebaseUid)"
@@ -462,10 +495,14 @@ const props = defineProps({
   myUsername:     { type: String,  default: 'Player' },
   myAvatar:       { type: String,  default: '👤' },
   // Mode invitation depuis ModalRoom
-  roomInviteMode: { type: Boolean, default: false },
-  roomId:         { type: String,  default: '' },
+  roomInviteMode:   { type: Boolean, default: false },
+  roomId:           { type: String,  default: '' },
+  // Slot color nanaovana + (0=Rouge,1=Vert,2=Bleu,3=Jaune), -1 raha tsy voatondro
+  inviteTargetSlot: { type: Number,  default: -1 },
+  // UIDs ireo players ao anaty room ankehitriny (mba hahafantarana "In Room")
+  inRoomUids:       { type: Array,   default: () => [] },
 })
-const emit  = defineEmits(['close', 'update-badge', 'open-room'])
+const emit  = defineEmits(['close', 'update-badge', 'open-room', 'invite-sent'])
 
 // ── Countdown state (Challenge button) ────────────────────────
 // countdowns[uid] = { value: 10, timer: intervalId } | undefined
@@ -768,6 +805,8 @@ const filteredInbox = computed(() => {
 const isFriend          = uid => allFriends.value.some(f => f.firebaseUid === uid && f.status === 'accepted')
 const isPendingSent     = uid => allFriends.value.some(f => f.firebaseUid === uid && f.status === 'pending_sent')
 const isPendingReceived = uid => allFriends.value.some(f => f.firebaseUid === uid && f.status === 'pending_received')
+// isInRoom: true raha ao anaty room ilay utilisateur (hanohana "In Room" badge)
+const isInRoom = uid => props.inRoomUids.includes(uid)
 
 // ── Firestore listener ─────────────────────────────────────────
 const startFriendsListener = () => {
@@ -926,20 +965,37 @@ const challengeFriend = async (f) => {
       await fetch('/api/room?action=send-invite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
+        body:    JSON.stringify({
+          targetFirebaseUid: uid,
+          roomId,
+          inviterUsername: props.myUsername,
+          targetSlot: 1,
+        }),
       })
 
       startCountdown(uid)
-
       waitForAccept(roomId, uid)
 
     } else {
-      await fetch('/api/room?action=send-invite', {
+      const targetSlot = props.inviteTargetSlot >= 0 ? props.inviteTargetSlot : null
+      const inviteRes = await fetch('/api/room?action=send-invite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body:    JSON.stringify({ targetFirebaseUid: uid, roomId, inviterUsername: props.myUsername }),
+        body:    JSON.stringify({
+          targetFirebaseUid: uid,
+          roomId,
+          inviterUsername: props.myUsername,
+          targetSlot,
+        }),
       })
-      startCountdown(uid)
+      if (inviteRes.ok) {
+        startCountdown(uid)
+        emit('invite-sent', { uid, targetSlot })
+      } else {
+        const errData = await inviteRes.json().catch(() => ({}))
+        showError(errData.message || 'Could not send invitation.')
+        return
+      }
       emit('close')
     }
   } catch (e) {
@@ -1227,5 +1283,20 @@ const handleClose = () => emit('close')
   color: rgba(255,180,60,.7);
 }
 .pop-report:hover:not(:disabled) { background: rgba(255,140,0,.18); color: rgba(255,180,60,.9); }
+
+/* In Room badge */
+.pop-inroom {
+  background: rgba(80,160,255,.1);
+  border: 1px solid rgba(80,160,255,.25);
+  color: rgba(130,190,255,.65);
+  cursor: not-allowed;
+}
+
+.fb-inroom {
+  background: rgba(80,160,255,.1);
+  border: 1px solid rgba(80,160,255,.3);
+  color: rgba(130,190,255,.7);
+  display: flex; align-items: center; gap: 4px;
+}
 
 </style>
