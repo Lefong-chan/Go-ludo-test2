@@ -103,9 +103,9 @@
 
         <div class="viewer-actions">
 
-          <!-- Challenge: raha online -->
+          <!-- Challenge: raha online ary tsy ao anaty room -->
           <button
-            v-if="viewerOnline"
+            v-if="viewerOnline && !props.viewerInRoom"
             class="vbtn vbtn-challenge"
             :class="{ 'btn-loading': viewerLoadingBtn === 'challenge' }"
             :disabled="!!viewerLoadingBtn"
@@ -116,6 +116,16 @@
               <span class="material-icons">sports_esports</span>
               Challenge
             </template>
+          </button>
+
+          <!-- In Room: raha online + ao anaty room izy -->
+          <button
+            v-else-if="viewerOnline && props.viewerInRoom"
+            class="vbtn vbtn-inroom"
+            disabled
+          >
+            <span class="material-icons">meeting_room</span>
+            In Room
           </button>
 
           <!-- Chat -->
@@ -250,6 +260,8 @@ const props = defineProps({
   wallet:      { type: [Number, String], default: 0 },
   avatar:      { type: String,  default: '👤' },
   viewerData:  { type: Object,  default: null },
+  // true raha ao anaty room ilay utilisateur aseho (miseho "In Room" badla Challenge)
+  viewerInRoom: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -657,6 +669,14 @@ const fetchAndShowEmail = async () => {
   border: 1px solid rgba(220,50,50,.28); color: #ff6b6b;
 }
 .vbtn-remove .material-icons { color: #ff6b6b; }
+
+/* In Room badge button */
+.vbtn-inroom {
+  background: linear-gradient(135deg, rgba(80,160,255,.14), rgba(30,80,200,.08));
+  border: 1px solid rgba(80,160,255,.3); color: rgba(130,190,255,.7);
+  cursor: not-allowed;
+}
+.vbtn-inroom .material-icons { color: rgba(80,160,255,.6); }
 
 .vbtn-report {
   background: rgba(255,140,0,.08);
