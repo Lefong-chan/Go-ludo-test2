@@ -16,6 +16,10 @@
               <span class="inv-title">Game Invitation</span>
               <span class="inv-msg">{{ message }}</span>
             </div>
+            <!-- Countdown circle -->
+            <div class="inv-countdown" :style="countdownStyle">
+              <span class="inv-countdown-num">{{ countdown }}</span>
+            </div>
             <button class="notif-close" @click="declineInvitation" aria-label="Close">
               <span class="material-icons">close</span>
             </button>
@@ -48,18 +52,23 @@
 <script setup>
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 
+const INVITATION_DURATION = 10 // secondes
+
 const props = defineProps({
   message:    { type: String,  default: '' },
   type:       { type: String,  default: 'error' }, // 'error' | 'warning' | 'info' | 'invitation'
-  duration:   { type: Number,  default: 4000 },    // 0 = no auto-close (used for invitations)
+  duration:   { type: Number,  default: 4000 },    // 0 = no auto-close
   inviterUid: { type: String,  default: '' },
   roomId:     { type: String,  default: '' },
 })
 
 const emit = defineEmits(['close', 'accept-invitation', 'decline-invitation'])
 
-const visible = ref(false)
-let   timer   = null
+const visible   = ref(false)
+const countdown = ref(INVITATION_DURATION)
+
+let autoTimer     = null
+let countdownInterval = null
 
 const icon = computed(() => {
   if (props.type === 'warning') return 'warning'
@@ -67,29 +76,58 @@ const icon = computed(() => {
   return 'error_outline'
 })
 
+// Progression arc SVG pour le cercle countdown (0..1)
+const countdownStyle = computed(() => {
+  const pct = countdown.value / INVITATION_DURATION
+  return {
+    '--pct': pct,
+  }
+})
+
+const clearTimers = () => {
+  clearTimeout(autoTimer)
+  clearInterval(countdownInterval)
+  autoTimer = null
+  countdownInterval = null
+}
+
+const startCountdown = () => {
+  countdown.value = INVITATION_DURATION
+  countdownInterval = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearTimers()
+      visible.value = false
+      emit('decline-invitation', { inviterUid: props.inviterUid, roomId: props.roomId })
+    }
+  }, 1000)
+}
+
 const show = () => {
-  clearTimeout(timer)
+  clearTimers()
   visible.value = true
-  
-  if (props.duration > 0 && props.type !== 'invitation') {
-    timer = setTimeout(close, props.duration)
+
+  if (props.type === 'invitation') {
+    startCountdown()
+  } else if (props.duration > 0) {
+    autoTimer = setTimeout(close, props.duration)
   }
 }
 
 const close = () => {
-  clearTimeout(timer)
+  clearTimers()
   visible.value = false
   emit('close')
 }
 
 const acceptInvitation = () => {
-  clearTimeout(timer)
+  clearTimers()
   visible.value = false
   emit('accept-invitation', { inviterUid: props.inviterUid, roomId: props.roomId })
 }
 
 const declineInvitation = () => {
-  clearTimeout(timer)
+  clearTimers()
   visible.value = false
   emit('decline-invitation', { inviterUid: props.inviterUid, roomId: props.roomId })
 }
@@ -98,7 +136,7 @@ watch(() => props.message, val => {
   if (val) show()
 })
 
-onBeforeUnmount(() => clearTimeout(timer))
+onBeforeUnmount(() => clearTimers())
 
 defineExpose({ show, close })
 </script>
@@ -127,9 +165,7 @@ defineExpose({ show, close })
   background: rgba(140, 20, 20, 0.92);
   border-color: rgba(255, 90, 90, 0.5);
   color: #ffe0e0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 13px 14px 13px 16px;
 }
 
@@ -138,9 +174,7 @@ defineExpose({ show, close })
   background: rgba(120, 80, 0, 0.92);
   border-color: rgba(255, 200, 50, 0.5);
   color: #fff3c0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 13px 14px 13px 16px;
 }
 
@@ -149,9 +183,7 @@ defineExpose({ show, close })
   background: rgba(10, 55, 110, 0.95);
   border-color: rgba(100, 180, 255, 0.4);
   color: #d0eaff;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 13px 14px 13px 16px;
 }
 
@@ -161,21 +193,16 @@ defineExpose({ show, close })
   border-color: rgba(100, 220, 120, 0.5);
   color: #e0fff0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: flex; flex-direction: column;
 }
 
 .inv-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 14px 10px 16px;
+  display: flex; align-items: center;
+  gap: 12px; padding: 14px 14px 10px 16px;
 }
 
 .inv-icon {
-  font-size: 30px;
-  color: #3ddc84;
-  flex-shrink: 0;
+  font-size: 30px; color: #3ddc84; flex-shrink: 0;
   filter: drop-shadow(0 0 8px rgba(61, 220, 132, 0.5));
   animation: invPulse 2s ease-in-out infinite;
 }
@@ -186,53 +213,62 @@ defineExpose({ show, close })
 }
 
 .inv-texts {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 2px; flex: 1; min-width: 0;
 }
 
 .inv-title {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 11px; font-weight: 800;
   color: rgba(61, 220, 132, 0.7);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  text-transform: uppercase; letter-spacing: 1.5px;
 }
 
 .inv-msg {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #e8fff5;
-  line-height: 1.4;
+  font-size: 13.5px; font-weight: 700;
+  color: #e8fff5; line-height: 1.4;
+}
+
+/* ── Countdown circle ── */
+.inv-countdown {
+  position: relative;
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.inv-countdown::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    rgba(61, 220, 132, 0.7) calc(var(--pct) * 360deg),
+    rgba(255,255,255,0.08) 0deg
+  );
+  transition: background 0.4s linear;
+}
+.inv-countdown::after {
+  content: '';
+  position: absolute; inset: 5px;
+  border-radius: 50%;
+  background: #061e38;
+}
+.inv-countdown-num {
+  position: relative; z-index: 1;
+  font-size: 13px; font-weight: 900;
+  color: #3ddc84; line-height: 1;
 }
 
 .inv-actions {
-  display: flex;
-  gap: 8px;
+  display: flex; gap: 8px;
   padding: 8px 14px 14px;
 }
 
 .inv-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 14px;
-  font-size: 12.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: filter 0.2s, transform 0.15s;
-  letter-spacing: 0.3px;
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 10px 14px; border: none; border-radius: 14px;
+  font-size: 12.5px; font-weight: 800; cursor: pointer;
+  transition: filter 0.2s, transform 0.15s; letter-spacing: 0.3px;
 }
-
 .inv-btn .material-icons { font-size: 17px; }
-
-.inv-btn:hover { filter: brightness(1.15); transform: scale(1.03); }
+.inv-btn:hover  { filter: brightness(1.15); transform: scale(1.03); }
 .inv-btn:active { transform: scale(0.97); }
 
 .inv-btn-accept {
@@ -249,45 +285,22 @@ defineExpose({ show, close })
 }
 
 /* ── Shared ── */
-.notif-icon {
-  font-size: 22px;
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
-.notif-msg {
-  flex: 1;
-  min-width: 0;
-}
+.notif-icon { font-size: 22px; flex-shrink: 0; opacity: 0.9; }
+.notif-msg  { flex: 1; min-width: 0; }
 
 .notif-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px;
-  color: inherit;
-  opacity: 0.55;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 50%;
+  background: none; border: none; cursor: pointer; padding: 2px;
+  color: inherit; opacity: 0.55;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; border-radius: 50%;
   transition: opacity 0.2s, background 0.2s;
 }
-.notif-close:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.15);
-}
+.notif-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.15); }
 .notif-close .material-icons { font-size: 17px; }
 
 /* ── Transition ── */
 .notif-fade-enter-active,
-.notif-fade-leave-active {
-  transition: opacity 0.28s ease, transform 0.28s ease;
-}
+.notif-fade-leave-active { transition: opacity 0.28s ease, transform 0.28s ease; }
 .notif-fade-enter-from,
-.notif-fade-leave-to {
-  opacity: 0;
-  transform: translateX(50px) scale(0.92);
-}
+.notif-fade-leave-to     { opacity: 0; transform: translateX(50px) scale(0.92); }
 </style>
