@@ -74,10 +74,11 @@
                 class="fb fb-i"
                 style="min-width:84px;"
                 :class="{ 'btn-loading': loadingBtn === 'challenge-' + f.firebaseUid }"
-                :disabled="!!loadingBtn"
+                :disabled="!!loadingBtn || getCountdown(f.firebaseUid) !== null"
                 @click.stop="challengeFriend(f)"
               >
                 <span v-if="loadingBtn === 'challenge-' + f.firebaseUid" class="btn-spin btn-spin-gold"></span>
+                <span v-else-if="getCountdown(f.firebaseUid) !== null" class="btn-countdown">{{ getCountdown(f.firebaseUid) }}</span>
                 <span v-else>Challenge</span>
               </button>
               <button v-else class="fb fb-i" style="min-width:84px;" @click.stop="openPlayerProfile(f)">
@@ -238,10 +239,13 @@
               v-if="popup.user && getPresence(popup.user.firebaseUid).online"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
-              :disabled="!!loadingBtn"
+              :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
               @click="challengeFriend(popup.user); closePopup()"
             >
               <span v-if="loadingBtn === 'challenge-' + popup.user?.firebaseUid" class="btn-spin btn-spin-gold"></span>
+              <template v-else-if="getCountdown(popup.user?.firebaseUid) !== null">
+                <span class="btn-countdown">{{ getCountdown(popup.user?.firebaseUid) }}</span>
+              </template>
               <template v-else>
                 <span class="material-icons">sports_esports</span>
                 Challenge
@@ -267,10 +271,13 @@
               v-if="popup.user && getPresence(popup.user.firebaseUid).online"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
-              :disabled="!!loadingBtn"
+              :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
               @click="challengeFriend(popup.user); closePopup()"
             >
               <span v-if="loadingBtn === 'challenge-' + popup.user?.firebaseUid" class="btn-spin btn-spin-gold"></span>
+              <template v-else-if="getCountdown(popup.user?.firebaseUid) !== null">
+                <span class="btn-countdown">{{ getCountdown(popup.user?.firebaseUid) }}</span>
+              </template>
               <template v-else>
                 <span class="material-icons">sports_esports</span>
                 Challenge
@@ -308,10 +315,13 @@
               v-if="popup.user && getPresence(popup.user.firebaseUid).online"
               class="pop-btn pop-challenge"
               :class="{ 'btn-loading': loadingBtn === 'challenge-' + popup.user?.firebaseUid }"
-              :disabled="!!loadingBtn"
+              :disabled="!!loadingBtn || getCountdown(popup.user?.firebaseUid) !== null"
               @click="challengeFriend(popup.user); closePopup()"
             >
               <span v-if="loadingBtn === 'challenge-' + popup.user?.firebaseUid" class="btn-spin btn-spin-gold"></span>
+              <template v-else-if="getCountdown(popup.user?.firebaseUid) !== null">
+                <span class="btn-countdown">{{ getCountdown(popup.user?.firebaseUid) }}</span>
+              </template>
               <template v-else>
                 <span class="material-icons">sports_esports</span>
                 Challenge
@@ -444,12 +454,47 @@ const FRIENDS_LIMIT = 100
 
 // ── Props / Emits ──────────────────────────────────────────────
 const props = defineProps({
-  show:          Boolean,
-  myFirebaseUid: { type: String, default: '' },
-  myUsername:    { type: String, default: 'Player' },
-  myAvatar:      { type: String, default: '👤' },
+  show:           Boolean,
+  myFirebaseUid:  { type: String,  default: '' },
+  myUsername:     { type: String,  default: 'Player' },
+  myAvatar:       { type: String,  default: '👤' },
+  // Mode invitation depuis ModalRoom
+  roomInviteMode: { type: Boolean, default: false },
+  roomId:         { type: String,  default: '' },
 })
 const emit  = defineEmits(['close', 'update-badge', 'open-room'])
+
+// ── Countdown state (Challenge button) ────────────────────────
+// countdowns[uid] = { value: 10, timer: intervalId } | undefined
+const countdowns = ref({})
+
+const startCountdown = (uid) => {
+  if (countdowns.value[uid]) return
+  const entry = { value: 10 }
+  countdowns.value = { ...countdowns.value, [uid]: entry }
+  entry.timer = setInterval(() => {
+    const cur = countdowns.value[uid]
+    if (!cur) return
+    if (cur.value <= 1) {
+      clearInterval(cur.timer)
+      const updated = { ...countdowns.value }
+      delete updated[uid]
+      countdowns.value = updated
+    } else {
+      countdowns.value = { ...countdowns.value, [uid]: { ...cur, value: cur.value - 1 } }
+    }
+  }, 1000)
+}
+
+const stopCountdown = (uid) => {
+  const cur = countdowns.value[uid]
+  if (cur?.timer) clearInterval(cur.timer)
+  const updated = { ...countdowns.value }
+  delete updated[uid]
+  countdowns.value = updated
+}
+
+const getCountdown = (uid) => countdowns.value[uid]?.value ?? null
 
 // ── UI state ───────────────────────────────────────────────────
 const localVisible     = ref(false)
@@ -562,6 +607,7 @@ const onProfileChallenge = async (firebaseUid) => {
   const user = allFriends.value.find(f => f.firebaseUid === firebaseUid)
     || searchResults.value.find(p => p.firebaseUid === firebaseUid)
   if (user) {
+    // Mikatona ModalProfile aloha automatique
     playerProfileVisible.value = false
     await challengeFriend(user)
   }
@@ -816,37 +862,52 @@ const acceptRequest = async (f) => {
 
 const declineRequest  = f => apiCall('decline-'   + f.firebaseUid, 'decline-request', { requesterFirebaseUid: f.firebaseUid })
 const challengeFriend = async (f) => {
-  const key = 'challenge-' + f.firebaseUid
+  const uid = f.firebaseUid
+  // Raha mbola anaty countdown → tsy afaka manao fanindroany
+  if (getCountdown(uid) !== null) return
+
+  const key = 'challenge-' + uid
   loadingBtn.value = key
   try {
     const token = localStorage.getItem('user_token')
-    // 1. Mamorona room vaovao
-    const createRes = await fetch('/api/room?action=create-room', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body:    JSON.stringify({ username: props.myUsername, avatar: props.myAvatar }),
-    })
-    // Safe JSON parse — miaro amin'ny "Unexpected token" rahefa mamerina HTML ny server
-    let createData
-    try { createData = await createRes.json() }
-    catch { showError('Server error. Please try again.'); return }
+    let roomId = props.roomId
 
-    if (!createRes.ok) { showError(createData.message || 'Could not create room.'); return }
-    const roomId = createData.roomId
-    if (!roomId)       { showError('Invalid room ID returned.'); return }
+    // Raha tsy eo amin'ny room-invite-mode dia mamorona room vaovao
+    if (!props.roomInviteMode) {
+      const createRes = await fetch('/api/room?action=create-room', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ username: props.myUsername, avatar: props.myAvatar }),
+      })
+      let createData
+      try { createData = await createRes.json() }
+      catch { showError('Server error. Please try again.'); return }
+      if (!createRes.ok) { showError(createData.message || 'Could not create room.'); return }
+      roomId = createData.roomId
+      if (!roomId) { showError('Invalid room ID returned.'); return }
+    }
 
-    // 2. Mandefitra invitation
+    // Mandefitra invitation
     await fetch('/api/room?action=send-invite', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body:    JSON.stringify({
-        targetFirebaseUid: f.firebaseUid,
+        targetFirebaseUid: uid,
         roomId,
         inviterUsername:   props.myUsername,
       }),
     })
-    // 3. Manokatra ModalRoom ho an'ilay nanao challenge
-    emit('open-room', roomId)
+
+    // Manomboka countdown eo amin'ny button
+    startCountdown(uid)
+
+    // Manokatra ModalRoom ho an'ilay nanao challenge (raha tsy eo amin'ny room-invite-mode)
+    if (!props.roomInviteMode) {
+      emit('open-room', roomId)
+    } else {
+      // Ao amin'ny room-invite-mode: mikatona ModalSocial rehefa vita ny invitation
+      emit('close')
+    }
   } catch (e) {
     showError(e.message || 'Network error.')
   } finally {
@@ -876,7 +937,11 @@ watch(() => props.show, val => {
   }
 })
 
-onUnmounted(stopFriendsListener)
+onUnmounted(() => {
+  stopFriendsListener()
+  // Fafao ny countdown timers rehetra
+  Object.keys(countdowns.value).forEach(uid => stopCountdown(uid))
+})
 const handleClose = () => emit('close')
 </script>
 
@@ -1024,6 +1089,12 @@ const handleClose = () => emit('close')
 .btn-spin-green { border-color:rgba(108,250,142,.25); border-top-color:#6cfa8e; }
 .btn-spin-red   { border-color:rgba(255,128,128,.25); border-top-color:#ff8080; }
 .btn-spin-gold  { border-color:rgba(255,217,102,.25); border-top-color:var(--gd); }
+
+.btn-countdown {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: var(--gd);
+  min-width: 18px;
+}
 
 .empty {
   flex:1; display:flex; flex-direction:column;
