@@ -33,11 +33,16 @@
                 </template>
                 <template v-else>
                   <!--
-                    isHost  = nanao invitation = miseho + (afaka manoso invitation)
-                    isGuest = nandray invitation = miseho Waiting
-                    playersLoaded = miandry aloha ny data RTDB vao miseho
+                    Slot vide:
+                    - isHost + slot ity ilay pending invite color = miseho +
+                    - isHost + slot hafa = miseho + (afaka manoso invitation)
+                    - Guest = miseho Waiting fotsiny
+                    - playersLoaded = miandry aloha ny data RTDB
                   -->
-                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost && pendingInviteSlot === 0" class="slot-add-btn slot-add-btn-pending" disabled>
+                    <span class="material-icons">hourglass_empty</span>
+                  </button>
+                  <button v-else-if="playersLoaded && isHost" class="slot-add-btn" @click="openInviteForSlot(0)">
                     <span class="material-icons">add</span>
                   </button>
                   <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
@@ -48,16 +53,22 @@
                 <span v-if="players[0]" class="slot-username">
                   {{ players[0].username }}
                   <span v-if="players[0].isMe" class="slot-you-badge">You</span>
+                  <!-- No-network badge -->
+                  <span v-if="players[0].noNetwork" class="slot-nonet-badge" title="No network">
+                    <span class="material-icons" style="font-size:10px;">wifi_off</span>
+                    offline
+                  </span>
                   <!-- Host mahita Ready/Not Ready an'ireo guests -->
                   <span
-                    v-if="isHost && !players[0].isMe"
+                    v-if="isHost && !players[0].isMe && !players[0].noNetwork"
                     class="slot-ready-badge"
                     :class="players[0].ready ? 'badge-ready' : 'badge-not-ready'"
                   >{{ players[0].ready ? 'Ready' : 'Not Ready' }}</span>
                 </span>
                 <span v-else class="slot-waiting">
-                  <span class="material-icons slot-wait-icon">schedule</span>
-                  Waiting
+                  <span v-if="pendingInviteSlot === 0" class="material-icons slot-wait-icon">send</span>
+                  <span v-else class="material-icons slot-wait-icon">schedule</span>
+                  {{ pendingInviteSlot === 0 ? 'Invited...' : 'Waiting' }}
                 </span>
               </div>
             </div>
@@ -69,7 +80,10 @@
                   <div class="slot-avatar">{{ players[1].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost && pendingInviteSlot === 1" class="slot-add-btn slot-add-btn-pending" disabled>
+                    <span class="material-icons">hourglass_empty</span>
+                  </button>
+                  <button v-else-if="playersLoaded && isHost" class="slot-add-btn" @click="openInviteForSlot(1)">
                     <span class="material-icons">add</span>
                   </button>
                   <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
@@ -80,15 +94,20 @@
                 <span v-if="players[1]" class="slot-username">
                   {{ players[1].username }}
                   <span v-if="players[1].isMe" class="slot-you-badge">You</span>
+                  <span v-if="players[1].noNetwork" class="slot-nonet-badge" title="No network">
+                    <span class="material-icons" style="font-size:10px;">wifi_off</span>
+                    offline
+                  </span>
                   <span
-                    v-if="isHost && !players[1].isMe"
+                    v-if="isHost && !players[1].isMe && !players[1].noNetwork"
                     class="slot-ready-badge"
                     :class="players[1].ready ? 'badge-ready' : 'badge-not-ready'"
                   >{{ players[1].ready ? 'Ready' : 'Not Ready' }}</span>
                 </span>
                 <span v-else class="slot-waiting">
-                  <span class="material-icons slot-wait-icon">schedule</span>
-                  Waiting
+                  <span v-if="pendingInviteSlot === 1" class="material-icons slot-wait-icon">send</span>
+                  <span v-else class="material-icons slot-wait-icon">schedule</span>
+                  {{ pendingInviteSlot === 1 ? 'Invited...' : 'Waiting' }}
                 </span>
               </div>
             </div>
@@ -100,7 +119,10 @@
                   <div class="slot-avatar">{{ players[2].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost && pendingInviteSlot === 2" class="slot-add-btn slot-add-btn-pending" disabled>
+                    <span class="material-icons">hourglass_empty</span>
+                  </button>
+                  <button v-else-if="playersLoaded && isHost" class="slot-add-btn" @click="openInviteForSlot(2)">
                     <span class="material-icons">add</span>
                   </button>
                   <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
@@ -111,15 +133,20 @@
                 <span v-if="players[2]" class="slot-username">
                   {{ players[2].username }}
                   <span v-if="players[2].isMe" class="slot-you-badge">You</span>
+                  <span v-if="players[2].noNetwork" class="slot-nonet-badge" title="No network">
+                    <span class="material-icons" style="font-size:10px;">wifi_off</span>
+                    offline
+                  </span>
                   <span
-                    v-if="isHost && !players[2].isMe"
+                    v-if="isHost && !players[2].isMe && !players[2].noNetwork"
                     class="slot-ready-badge"
                     :class="players[2].ready ? 'badge-ready' : 'badge-not-ready'"
                   >{{ players[2].ready ? 'Ready' : 'Not Ready' }}</span>
                 </span>
                 <span v-else class="slot-waiting">
-                  <span class="material-icons slot-wait-icon">schedule</span>
-                  Waiting
+                  <span v-if="pendingInviteSlot === 2" class="material-icons slot-wait-icon">send</span>
+                  <span v-else class="material-icons slot-wait-icon">schedule</span>
+                  {{ pendingInviteSlot === 2 ? 'Invited...' : 'Waiting' }}
                 </span>
               </div>
             </div>
@@ -131,7 +158,10 @@
                   <div class="slot-avatar">{{ players[3].avatar || '👤' }}</div>
                 </template>
                 <template v-else>
-                  <button v-if="playersLoaded && isHost" class="slot-add-btn" @click="openInvite">
+                  <button v-if="playersLoaded && isHost && pendingInviteSlot === 3" class="slot-add-btn slot-add-btn-pending" disabled>
+                    <span class="material-icons">hourglass_empty</span>
+                  </button>
+                  <button v-else-if="playersLoaded && isHost" class="slot-add-btn" @click="openInviteForSlot(3)">
                     <span class="material-icons">add</span>
                   </button>
                   <span v-else-if="playersLoaded && !isHost" class="slot-empty-icon material-icons">hourglass_empty</span>
@@ -142,15 +172,20 @@
                 <span v-if="players[3]" class="slot-username">
                   {{ players[3].username }}
                   <span v-if="players[3].isMe" class="slot-you-badge">You</span>
+                  <span v-if="players[3].noNetwork" class="slot-nonet-badge" title="No network">
+                    <span class="material-icons" style="font-size:10px;">wifi_off</span>
+                    offline
+                  </span>
                   <span
-                    v-if="isHost && !players[3].isMe"
+                    v-if="isHost && !players[3].isMe && !players[3].noNetwork"
                     class="slot-ready-badge"
                     :class="players[3].ready ? 'badge-ready' : 'badge-not-ready'"
                   >{{ players[3].ready ? 'Ready' : 'Not Ready' }}</span>
                 </span>
                 <span v-else class="slot-waiting">
-                  <span class="material-icons slot-wait-icon">schedule</span>
-                  Waiting
+                  <span v-if="pendingInviteSlot === 3" class="material-icons slot-wait-icon">send</span>
+                  <span v-else class="material-icons slot-wait-icon">schedule</span>
+                  {{ pendingInviteSlot === 3 ? 'Invited...' : 'Waiting' }}
                 </span>
               </div>
             </div>
@@ -165,16 +200,6 @@
 
           <!-- ── Actions ── -->
           <div class="room-actions">
-
-            <!--
-              HOST (nanao invitation)  → START GAME
-              GUEST (nandray invitation) → Ready / Not Ready
-              Label = state ankehitriny (tsy action):
-                myReady=true  → miseho "Ready"    (maitso) = hita fa ready izy
-                myReady=false → miseho "Not Ready" (mena)   = hita fa tsy ready
-              Manindry = manova ny state (toggle)
-            -->
-
             <button
               v-if="isHost"
               class="room-btn room-btn-play"
@@ -199,7 +224,6 @@
               <span class="material-icons">{{ myReady ? 'check_circle' : 'close' }}</span>
               {{ myReady ? 'Ready' : 'Not Ready' }}
             </button>
-
           </div>
 
         </div>
@@ -227,7 +251,9 @@
       :my-avatar="myAvatar"
       :room-invite-mode="true"
       :room-id="roomId"
+      :invite-target-slot="pendingInviteSlot"
       @close="showInviteModal = false"
+      @invite-sent="onInviteSent"
     />
 
     <!-- ── ModalNotification: room dissolved by host ── -->
@@ -285,6 +311,7 @@ const emit = defineEmits(['close', 'game-start'])
 // ── State ──────────────────────────────────────────────────────
 const localVisible    = ref(false)
 const closing         = ref(false)
+// players[0..3] = slot Rouge / Vert / Bleu / Jaune (fixed par `slot` amin'ny RTDB)
 const players         = ref([null, null, null, null])
 const playersLoaded   = ref(false)
 const isStarting      = ref(false)
@@ -293,20 +320,21 @@ const isLeaving       = ref(false)
 const showInviteModal = ref(false)
 const dissolvedMsg    = ref('')
 
+const pendingInviteSlot = ref(-1)
+
 // ── Computed ───────────────────────────────────────────────────
 const activePlayers = computed(() => players.value.filter(Boolean).length)
 
 const isHost = computed(() => {
-  const first = players.value.find(Boolean)
-  if (!first) return false
-  return first.firebaseUid === props.myUid
+  const p0 = players.value[0]
+  if (!p0) return false
+  return p0.firebaseUid === props.myUid
 })
 
 const hasNotReady = computed(() => {
-  const hostUid = players.value.find(Boolean)?.firebaseUid
   return players.value
     .filter(Boolean)
-    .filter(p => p.firebaseUid !== hostUid)
+    .filter(p => p.firebaseUid !== players.value[0]?.firebaseUid)
     .some(p => !p.ready)
 })
 
@@ -322,12 +350,21 @@ const toggleReady = async () => {
   await update(playerRef, { ready: !myReady.value })
 }
 
-// ── Open invite modal ──────────────────────────────────────────
-const openInvite = () => { showInviteModal.value = true }
+// ── Open invite modal (pour un slot précis) ────────────────────
+const openInviteForSlot = (slotIndex) => {
+  pendingInviteSlot.value = slotIndex
+  showInviteModal.value = true
+}
+
+const onInviteSent = () => {
+  showInviteModal.value = false
+}
 
 // ── RTDB listener ──────────────────────────────────────────────
 let roomRef   = null
 let unsubRoom = null
+
+const slotMap = ref({})
 
 const startRoomListener = () => {
   if (!props.roomId) return
@@ -348,11 +385,26 @@ const startRoomListener = () => {
 
     const data  = roomData.players || {}
     const slots = [null, null, null, null]
-    Object.values(data).forEach((p, i) => {
-      if (i < 4) slots[i] = { ...p, isMe: p.firebaseUid === props.myUid }
+
+    Object.values(data).forEach((p) => {
+      const slotIdx = p.slot
+      if (typeof slotIdx === 'number' && slotIdx >= 0 && slotIdx < 4) {
+        slots[slotIdx] = {
+          ...p,
+          isMe: p.firebaseUid === props.myUid,
+          noNetwork: !p.online && p.lastNetworkLost
+            ? (Date.now() - p.lastNetworkLost < 15000)
+            : false,
+        }
+      }
     })
+
     players.value      = slots
     playersLoaded.value = true
+
+    if (pendingInviteSlot.value >= 0 && slots[pendingInviteSlot.value] !== null) {
+      pendingInviteSlot.value = -1
+    }
   }
 
   onValue(roomRef, handler)
@@ -378,13 +430,30 @@ const forceClose = () => {
 // ── Join room ──────────────────────────────────────────────────
 const joinRoom = async () => {
   if (!props.roomId || !props.myUid) return
-  const playerRef = dbRef(rtdb, `rooms/${props.roomId}/players/${props.myUid}`)
-  await dbSet(playerRef, {
-    firebaseUid: props.myUid,
-    username:    props.myName,
-    avatar:      props.myAvatar,
-    ready:       false,
-    joinedAt:    serverTimestamp(),
+
+  const existingSnap = await new Promise(resolve => {
+    const r = dbRef(rtdb, `rooms/${props.roomId}/players/${props.myUid}`)
+    onValue(r, snap => { off(r); resolve(snap) }, { onlyOnce: true })
+  })
+
+  if (existingSnap.exists()) {
+    await update(dbRef(rtdb, `rooms/${props.roomId}/players/${props.myUid}`), {
+      username: props.myName,
+      avatar:   props.myAvatar,
+      online:   true,
+    })
+    return
+  }
+
+  const token = localStorage.getItem('user_token')
+  await fetch('/api/room?action=join-room', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body:    JSON.stringify({
+      roomId:   props.roomId,
+      username: props.myName,
+      avatar:   props.myAvatar,
+    }),
   })
 }
 
@@ -451,6 +520,8 @@ watch(() => props.show, async (val) => {
     dissolvedMsg.value  = ''
     players.value       = [null, null, null, null]
     playersLoaded.value = false
+    pendingInviteSlot.value = -1
+    slotMap.value = {}
     document.body.style.overflow = 'hidden'
     startRoomListener()
     await joinRoom()
@@ -508,7 +579,6 @@ onUnmounted(() => stopRoomListener())
 }
 @keyframes rFade { to { opacity: 0; } }
 
-/* ── Leave Room button – ambony ankavanana ── */
 .room-leave-top {
   position: absolute; top: 14px; right: 16px;
   display: flex; align-items: center; gap: 5px;
@@ -599,11 +669,24 @@ onUnmounted(() => stopRoomListener())
   cursor: pointer; transition: .2s;
 }
 .slot-add-btn .material-icons { font-size: 24px; }
-.slot-add-btn:hover {
+.slot-add-btn:hover:not(:disabled) {
   background: rgba(61,220,132,.24);
   border-color: rgba(61,220,132,.75);
   color: #3ddc84;
   transform: scale(1.1);
+}
+
+/* Pending invite: ilay slot nampandraisana (miandry player) */
+.slot-add-btn-pending {
+  background: rgba(255,200,60,.12);
+  border: 2px dashed rgba(255,200,60,.45);
+  color: rgba(255,200,60,.6);
+  cursor: not-allowed;
+  animation: pendingPulse 1.5s ease-in-out infinite;
+}
+@keyframes pendingPulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
 }
 
 .slot-empty-icon {
@@ -630,6 +713,20 @@ onUnmounted(() => stopRoomListener())
   background: rgba(255,220,80,.25); border: 1px solid rgba(255,220,80,.4);
   color: #ffd966; border-radius: 8px; padding: 1px 5px;
   letter-spacing: .5px; text-transform: uppercase; flex-shrink: 0;
+}
+
+/* ── No-network badge ── */
+.slot-nonet-badge {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 8px; font-weight: 900;
+  background: rgba(220,80,70,.2); border: 1px solid rgba(220,80,70,.45);
+  color: #ff8080; border-radius: 8px; padding: 1px 5px;
+  letter-spacing: .3px; text-transform: uppercase; flex-shrink: 0;
+  animation: noNetPulse 1.5s ease-in-out infinite;
+}
+@keyframes noNetPulse {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1; }
 }
 
 .slot-ready-badge {
