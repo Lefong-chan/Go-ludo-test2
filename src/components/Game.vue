@@ -71,7 +71,7 @@
       </div>
       <div class="cell-container">
         <div class="row"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
-        <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell green entry-cell" ref="entryGreenRef"><div v-if="dockedCount.green > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.green > 1, 'entry-piece-row-double': dockedCount.green === 2, 'entry-piece-row-triple': dockedCount.green >= 3 }"><img v-for="n in dockedCount.green" :key="n" src="../assets/images/pieces/green_piece.png" class="entry-piece-img" alt="Pion vert"></div></div></div>
+        <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell green entry-cell" ref="entryGreenRef"><div v-for="(row, ri) in dockedRows('green')" :key="ri" class="entry-piece-row" :class="row.cls"><img v-for="n in row.n" :key="n" src="../assets/images/pieces/green_piece.png" class="entry-piece-img" alt="Pion vert"></div></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
@@ -91,7 +91,7 @@
     <div class="row middle">
       <div class="cell-container">
         <div class="row">
-          <div class="cell"></div><div class="cell red entry-cell" ref="entryRedRef"><div v-if="dockedCount.red > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.red > 1, 'entry-piece-row-double': dockedCount.red === 2, 'entry-piece-row-triple': dockedCount.red >= 3 }"><img v-for="n in dockedCount.red" :key="n" src="../assets/images/pieces/red_piece.png" class="entry-piece-img" alt="Pion rouge"></div></div>
+          <div class="cell"></div><div class="cell red entry-cell" ref="entryRedRef"><div v-for="(row, ri) in dockedRows('red')" :key="ri" class="entry-piece-row" :class="row.cls"><img v-for="n in row.n" :key="n" src="../assets/images/pieces/red_piece.png" class="entry-piece-img" alt="Pion rouge"></div></div>
           <div class="cell"></div><div class="cell"></div>
           <div class="cell"></div><div class="cell"></div>
         </div>
@@ -121,7 +121,7 @@
         <div class="row">
           <div class="cell"></div><div class="cell"></div>
           <div class="cell"></div><div class="cell"></div>
-          <div class="cell yellow entry-cell" ref="entryYellowRef"><div v-if="dockedCount.yellow > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.yellow > 1, 'entry-piece-row-double': dockedCount.yellow === 2, 'entry-piece-row-triple': dockedCount.yellow >= 3 }"><img v-for="n in dockedCount.yellow" :key="n" src="../assets/images/pieces/yellow_piece.png" class="entry-piece-img" alt="Pion jaune"></div></div><div class="cell"></div>
+          <div class="cell yellow entry-cell" ref="entryYellowRef"><div v-for="(row, ri) in dockedRows('yellow')" :key="ri" class="entry-piece-row" :class="row.cls"><img v-for="n in row.n" :key="n" src="../assets/images/pieces/yellow_piece.png" class="entry-piece-img" alt="Pion jaune"></div></div><div class="cell"></div>
         </div>
       </div>
     </div>
@@ -141,7 +141,7 @@
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
-        <div class="row"><div class="cell blue entry-cell" ref="entryBlueRef"><div v-if="dockedCount.blue > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.blue > 1, 'entry-piece-row-double': dockedCount.blue === 2, 'entry-piece-row-triple': dockedCount.blue >= 3 }"><img v-for="n in dockedCount.blue" :key="n" src="../assets/images/pieces/blue_piece.png" class="entry-piece-img" alt="Pion bleu"></div></div><div class="cell blue"></div><div class="cell"></div></div>
+        <div class="row"><div class="cell blue entry-cell" ref="entryBlueRef"><div v-for="(row, ri) in dockedRows('blue')" :key="ri" class="entry-piece-row" :class="row.cls"><img v-for="n in row.n" :key="n" src="../assets/images/pieces/blue_piece.png" class="entry-piece-img" alt="Pion bleu"></div></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
       </div>
       <div class="yellow-box">
@@ -436,16 +436,39 @@ const interactive = computed(() => {
 // ambony-havia (1) fahaefatra — ka ny "isPieceHome" eto ambany no
 // mamaha izany ho an'ny <template> (v-if isaky ny 4 pion an-trano).
 const piecesOutState = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
-// "dockedCount[couleur]" — isan'ny pion (0-4) miseho MARINA (v-for) any
+// "dockedCount[couleur]" — isan'ny pion (0-4) miseho MARINA any
 // amin'ilay "cadre kely" (entry-cell), rehefa vita ny animation
 // mihisaka (500ms) — tsy avy hatrany rehefa "piecesOutState" mihitsy
 // miova (izay manomboka ny animation, jereo animatePieceExit), fa
 // 500ms aty aoriana, mba tsy hisy "double" (pion eo amin'ny roa
-// toerana miaraka). Raha "1" ihany, lehibe (130%, PIECE_DOCK_SCALE) sy
-// afovoany ilay pion; raha "2" (100%) na "3+" (70%), mihakely avokoa
-// izy ireo ary mifanindry mifanakaiky (jereo .entry-piece-row-double/
-// -triple ao amin'ny <style>).
+// toerana miaraka).
 const dockedCount     = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
+// "dockedRows(couleur)" — mamaha ny dockedCount ho lisitry ny "andalana"
+// (row) tokony haseho ao anaty entry-cell (jereo <template>, isaky ny
+// couleur: v-for amin'ny valiny avy amin'ity), satria tsy mitovy avokoa
+// ny fandaminana arakaraka ny isan'ny pion "docké":
+//  - 1: andalana iray, pion iray, tsy misy class fanampiny (mijanona
+//    amin'ny default an'ny .entry-piece-row/.entry-piece-img: 130%,
+//    elanelana 8% amin'ny ambany, afovoany).
+//  - 2: andalana iray, pion roa (.entry-piece-row-double: 100%,
+//    elanelana 20%).
+//  - 3: andalana iray, pion telo (.entry-piece-row-triple: 70%,
+//    elanelana 25%).
+//  - 4: ROA andalana miavaka (nangatahin'ny mpampiasa): ny telo eo
+//    ambony (.entry-piece-row-quad-top: 70%, elanelana 50% — avo kokoa
+//    mba hisy toerana ho an'ilay iray eo ambany), ary ny iray eo
+//    ambany (.entry-piece-row-quad-bottom: 70%, elanelana 8% — mitovy
+//    amin'ny "tokana").
+const DOCKED_ROW_CLASS = { 1: '', 2: 'entry-piece-row-double', 3: 'entry-piece-row-triple' }
+const dockedRows = (colorKey) => {
+  const count = dockedCount[colorKey]
+  if (count <= 0) return []
+  if (count <= 3) return [{ n: count, cls: DOCKED_ROW_CLASS[count] }]
+  return [
+    { n: 3, cls: 'entry-piece-row-quad-top' },
+    { n: 1, cls: 'entry-piece-row-quad-bottom' },
+  ]
+}
 // "travelPiece" — ilay sary "mihisaka" (position:absolute anaty
 // ".board", jereo <template>), fehezin'i animatePieceExit eto ambany.
 const travelPiece = reactive({ active: false, src: '', style: {} })
@@ -901,42 +924,52 @@ body {
   z-index: 5;
   pointer-events: none;
 }
-/* Raha roa (na mihoatra) pion miaraka ao anaty cadre iray ihany (jereo
-   dockedCount ao <script>) — ny elanelana amin'ny ambany dia lehibe
-   kokoa (fa tsy 8%) mba hisy toerana ho an'izy ireo mifanakaiky
-   ("mi-colle", jereo .entry-piece-row eto ambony — "align-items:
-   flex-end" no mampifanindry azy ireo, "gap:0" [default] no
-   mampikasika azy ireo): 20% raha roa, 30% raha telo (na mihoatra,
-   jereo .entry-piece-row-triple eto ambany, mandresy lahatra ny
-   "specificity" mitovy satria aoriana kokoa ao amin'ity fichier ity). */
-.entry-piece-row-multi {
-  bottom: 20%;
-}
 /* Ilay pion "docké" tsirairay avy (mitovy convention amin'ny
    ".piece-img": "width:auto" mba tsy hisy fanenjehana/"stretch" —
    jereo BUGFIX ao <script>, animatePieceExit — ny "height" ihany no
-   "authoritative"). Tokana (.entry-piece-row, tsy "-multi"): 130%
-   (PIECE_DOCK_SCALE ao <script>) — tafahotra kely ny ambony (mipoitra
-   mihoatra ny taipika ambony an'ilay cadre, araka ny sary nomen'ny
-   mpampiasa). Roa (.entry-piece-row-double): 100%. Telo na mihoatra
-   (.entry-piece-row-triple): 70%, mba hahalalana azy telo mifanindry
-   ao anaty cadre kely iray. */
+   "authoritative"). Ny "default" (tsy misy class fanampiny, dockedRows
+   ao <script> — 1 pion): 130% (PIECE_DOCK_SCALE ao <script>) sy
+   elanelana 8% (jereo .entry-piece-row etsy ambony) — tafahotra kely
+   ny ambony (mipoitra mihoatra ny taipika ambony an'ilay cadre, araka
+   ny sary nomen'ny mpampiasa). Ny class ambany ireto (nomen'i
+   dockedRows) kosa dia mifanindry ("mi-colle", "align-items:flex-end"
+   an'ny .entry-piece-row no mampifanindry ny "ambany"n'izy ireo, "gap:0"
+   [default] no mampikasika azy ireo) — 2, 3, na 4 pion (roa andalana
+   miavaka amin'io farany io, jereo dockedRows ao <script>). */
 .entry-piece-img {
   height: 130%;
   width: auto;
   max-width: none;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
+/* 2 pion: 100%, elanelana 20%. */
+.entry-piece-row-double {
+  bottom: 20%;
+}
 .entry-piece-row-double .entry-piece-img {
   height: 100%;
 }
-/* "bottom:30%" eto (fa tsy 20%, izay an'ny .entry-piece-row-multi
-   ambony) — mandresy lahatra satria mitovy "specificity" (1 class)
-   ihany fa aoriana kokoa amin'ity fichier CSS ity. */
+/* 3 pion: 70%, elanelana 25%. */
 .entry-piece-row-triple {
-  bottom: 30%;
+  bottom: 25%;
 }
 .entry-piece-row-triple .entry-piece-img {
+  height: 70%;
+}
+/* 4 pion: ROA andalana (jereo dockedRows ao <script>) — ny telo eo
+   ambony (avo kokoa, elanelana 50%, mba hisy toerana ho an'ilay iray
+   eo ambany), ary ny iray eo ambany (elanelana 8%, mitovy amin'ny
+   "tokana") — samy 70% ny habeny. */
+.entry-piece-row-quad-top {
+  bottom: 50%;
+}
+.entry-piece-row-quad-top .entry-piece-img {
+  height: 70%;
+}
+.entry-piece-row-quad-bottom {
+  bottom: 8%;
+}
+.entry-piece-row-quad-bottom .entry-piece-img {
   height: 70%;
 }
 
