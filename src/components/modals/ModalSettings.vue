@@ -83,6 +83,8 @@
 import { ref, computed, watch } from 'vue'
 import ModalConfirm   from './ModalConfirm.vue'
 import { fetchWithTimeout } from '../../utils/network'
+import { signOut } from 'firebase/auth'
+import { auth } from '../../firebase'
 
 const props = defineProps({
   show:   { type: Boolean, default: false },
@@ -164,6 +166,14 @@ const doLogout = async () => {
       })
     }
   } catch { }
+
+  // "signOut" (Firebase client SDK) — ny session Firebase Auth
+  // navorona tao amin'i Auth.vue (signInWithEmailAndPassword) dia
+  // TSY voafafan'ny "localStorage.clear()" etsy ambany (tehirizina any
+  // amin'ny IndexedDB manokana ny SDK) — atsahatra manokana eto io
+  // mba tsy hijanona "connecté" (Firestore) ilay navigateur na dia
+  // efa "déconnecté" aza ny lalao.
+  await signOut(auth).catch(() => {})
 
   localStorage.clear()
   window.location.replace('/')
