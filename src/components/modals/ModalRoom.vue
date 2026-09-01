@@ -471,9 +471,7 @@ const authHeaders = () => {
 
 // "silent" — ampiasain'ny "get-room"/"heartbeat" (polling, isaky ny
 // 800ms-2500ms/1.2s): tsy mampiseho Notification isaky ny "tick" tsy
-// mety (hoentina spam) — ny overlay "Reconnexion"/"Connexion perdue"
-// manerana ny app (jereo fetchWithTimeout → netState) no efa mahavaly
-// izany ambin'ny "passive". Ny action mivantana ataon'ny mpampiasa
+// mety (hoentina spam). Ny action mivantana ataon'ny mpampiasa
 // (set-ready, start-game, leave-room, kick-player, sns) kosa dia
 // mampiseho Notification foana (silent=false, valeur default).
 const callRoom = async (action, extra = {}, { silent = false } = {}) => {

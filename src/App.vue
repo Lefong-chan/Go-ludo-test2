@@ -38,10 +38,6 @@ Column: {{ debugError.column }}
 
     <Home v-else />
   </template>
-
-  <!-- ── Reconnexion / Connexion perdue — manerana ny app manontolo,
-       na aiza na aiza toerana misy ny mpampiasa (Auth na Home) ── -->
-  <NetworkOverlay />
 </template>
 
 <script setup>
@@ -53,7 +49,6 @@ import {
 
 import Auth from './components/Auth.vue'
 import Home from './components/Home.vue'
-import NetworkOverlay from './components/NetworkOverlay.vue'
 
 const loggedIn = ref(false)
 const debugError = ref(null)
