@@ -906,7 +906,7 @@ body {
    kokoa (fa tsy 8%) mba hisy toerana ho an'izy ireo mifanakaiky
    ("mi-colle", jereo .entry-piece-row eto ambony — "align-items:
    flex-end" no mampifanindry azy ireo, "gap:0" [default] no
-   mampikasika azy ireo): 20% raha roa, 40% raha telo (na mihoatra,
+   mampikasika azy ireo): 20% raha roa, 30% raha telo (na mihoatra,
    jereo .entry-piece-row-triple eto ambany, mandresy lahatra ny
    "specificity" mitovy satria aoriana kokoa ao amin'ity fichier ity). */
 .entry-piece-row-multi {
@@ -930,11 +930,11 @@ body {
 .entry-piece-row-double .entry-piece-img {
   height: 100%;
 }
-/* "bottom:40%" eto (fa tsy 20%, izay an'ny .entry-piece-row-multi
+/* "bottom:30%" eto (fa tsy 20%, izay an'ny .entry-piece-row-multi
    ambony) — mandresy lahatra satria mitovy "specificity" (1 class)
    ihany fa aoriana kokoa amin'ity fichier CSS ity. */
 .entry-piece-row-triple {
-  bottom: 40%;
+  bottom: 30%;
 }
 .entry-piece-row-triple .entry-piece-img {
   height: 70%;
