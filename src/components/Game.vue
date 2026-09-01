@@ -71,7 +71,7 @@
       </div>
       <div class="cell-container">
         <div class="row"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
-        <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell green entry-cell" ref="entryGreenRef"><img v-if="dockedPiece.green" src="../assets/images/pieces/green_piece.png" class="entry-piece-img" alt="Pion vert"></div></div>
+        <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell green entry-cell" ref="entryGreenRef"><div v-if="dockedCount.green > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.green > 1 }"><img v-for="n in dockedCount.green" :key="n" src="../assets/images/pieces/green_piece.png" class="entry-piece-img" alt="Pion vert"></div></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell green"></div><div class="cell"></div></div>
@@ -91,7 +91,7 @@
     <div class="row middle">
       <div class="cell-container">
         <div class="row">
-          <div class="cell"></div><div class="cell red entry-cell" ref="entryRedRef"><img v-if="dockedPiece.red" src="../assets/images/pieces/red_piece.png" class="entry-piece-img" alt="Pion rouge"></div>
+          <div class="cell"></div><div class="cell red entry-cell" ref="entryRedRef"><div v-if="dockedCount.red > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.red > 1 }"><img v-for="n in dockedCount.red" :key="n" src="../assets/images/pieces/red_piece.png" class="entry-piece-img" alt="Pion rouge"></div></div>
           <div class="cell"></div><div class="cell"></div>
           <div class="cell"></div><div class="cell"></div>
         </div>
@@ -121,7 +121,7 @@
         <div class="row">
           <div class="cell"></div><div class="cell"></div>
           <div class="cell"></div><div class="cell"></div>
-          <div class="cell yellow entry-cell" ref="entryYellowRef"><img v-if="dockedPiece.yellow" src="../assets/images/pieces/yellow_piece.png" class="entry-piece-img" alt="Pion jaune"></div><div class="cell"></div>
+          <div class="cell yellow entry-cell" ref="entryYellowRef"><div v-if="dockedCount.yellow > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.yellow > 1 }"><img v-for="n in dockedCount.yellow" :key="n" src="../assets/images/pieces/yellow_piece.png" class="entry-piece-img" alt="Pion jaune"></div></div><div class="cell"></div>
         </div>
       </div>
     </div>
@@ -141,7 +141,7 @@
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell blue"></div><div class="cell"></div></div>
-        <div class="row"><div class="cell blue entry-cell" ref="entryBlueRef"><img v-if="dockedPiece.blue" src="../assets/images/pieces/blue_piece.png" class="entry-piece-img" alt="Pion bleu"></div><div class="cell blue"></div><div class="cell"></div></div>
+        <div class="row"><div class="cell blue entry-cell" ref="entryBlueRef"><div v-if="dockedCount.blue > 0" class="entry-piece-row" :class="{ 'entry-piece-row-multi': dockedCount.blue > 1 }"><img v-for="n in dockedCount.blue" :key="n" src="../assets/images/pieces/blue_piece.png" class="entry-piece-img" alt="Pion bleu"></div></div><div class="cell blue"></div><div class="cell"></div></div>
         <div class="row"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
       </div>
       <div class="yellow-box">
@@ -436,12 +436,16 @@ const interactive = computed(() => {
 // ambony-havia (1) fahaefatra — ka ny "isPieceHome" eto ambany no
 // mamaha izany ho an'ny <template> (v-if isaky ny 4 pion an-trano).
 const piecesOutState = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
-// "dockedPiece[couleur]" — miseho (v-if) any amin'ilay "cadre kely"
-// (entry-cell) ny pion rehefa vita ny animation mihisaka (300ms) —
-// tsy avy hatrany rehefa "piecesOutState" mihitsy miova (izay
-// manomboka ny animation, jereo animatePieceExit), fa 300ms aty
-// aoriana, mba tsy hisy "double" (pion eo amin'ny roa toerana miaraka).
-const dockedPiece     = reactive({ red: false, green: false, blue: false, yellow: false })
+// "dockedCount[couleur]" — isan'ny pion (0-4) miseho MARINA (v-for) any
+// amin'ilay "cadre kely" (entry-cell), rehefa vita ny animation
+// mihisaka (500ms) — tsy avy hatrany rehefa "piecesOutState" mihitsy
+// miova (izay manomboka ny animation, jereo animatePieceExit), fa
+// 500ms aty aoriana, mba tsy hisy "double" (pion eo amin'ny roa
+// toerana miaraka). Raha "1" ihany, lehibe (130%, PIECE_DOCK_SCALE) sy
+// afovoany ilay pion; raha "2" na mihoatra, mihakely ho 90% avokoa
+// izy ireo ary mifanindry mifanakaiky (jereo .entry-piece-row-multi
+// ao amin'ny <style>).
+const dockedCount     = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
 // "travelPiece" — ilay sary "mihisaka" (position:absolute anaty
 // ".board", jereo <template>), fehezin'i animatePieceExit eto ambany.
 const travelPiece = reactive({ active: false, src: '', style: {} })
@@ -469,7 +473,7 @@ const isPieceHome = (colorKey, position) => piecesOutState[colorKey] < (5 - posi
 // ".piece-travel") no mampiseho ny fihisahana sy ny fihenan'ny taille
 // (98% → 90%) miaraka; 4) miova ho "true" NY "piecesOutState" (manafina
 // ilay pion an-trano, jereo isPieceHome) MIVANTANA amin'ny fanombohan'
-// ny animation (fa TSY ny "dockedPiece", izay miandry ny 300ms mba
+// ny animation (fa TSY ny "dockedCount", izay miandry ny 500ms mba
 // tsy hisy pion eo amin'ny roa toerana miaraka).
 // PIECE_SLIDE_MS — 0.5s (nangatahina) ny fahareten'ilay fihisahana.
 const PIECE_SLIDE_MS = 500
@@ -544,7 +548,7 @@ const animatePieceExit = async (colorKey, pieceOutIndex) => {
 
   setTimeout(() => {
     travelPiece.active = false
-    dockedPiece[colorKey] = true
+    dockedCount[colorKey] += 1
   }, PIECE_SLIDE_MS)
 }
 
@@ -644,7 +648,7 @@ const applyGameState = (game) => {
     const piecesOut = Array.isArray(game.piecesOut) ? game.piecesOut : [0, 0, 0, 0]
     for (const key of COLOR_BY_SLOT) {
       piecesOutState[key] = piecesOut[SLOT_INDEX[key]] || 0
-      dockedPiece[key]    = piecesOutState[key] > 0
+      dockedCount[key]    = piecesOutState[key]
     }
     return
   }
@@ -871,29 +875,57 @@ body {
 
 /* Ilay "cadre kely" (cellule) hidiran'ny pion rehefa 6 (jereo
    animatePieceExit ao <script>) — "position:relative" mba hametrahana
-   ilay pion "docké" (.entry-piece-img) ao anatiny, rehefa vita ny
-   animation "mihisaka" (.piece-travel). */
+   ilay "entry-piece-row" ao anatiny, rehefa vita ny animation
+   "mihisaka" (.piece-travel). */
 .entry-cell {
   position: relative;
 }
-/* Ilay pion "docké" (miorina ao anaty entry-cell, rehefa vita ny
-   animation) — mitovy convention amin'ny ".piece-img" (bottom:8%,
-   "tsy mikasika ilay taipika bottom" — TSY miova io), fa lehibe kokoa
-   noho ny cadre mihitsy (PIECE_DOCK_SCALE ao <script>, 130%) — tafahotra
-   kely ny ambony (mipoitra mihoatra ny taipika ambony an'ilay cadre,
-   araka ny sary nomen'ny mpampiasa) — "z-index" mba hijoro eo ambonin'
-   ny cadre eo ambony azy (izay mifanindry aminy amin'io toe-javatra io). */
-.entry-piece-img {
+/* "entry-piece-row" — mitazona ny pion "docké" iray na maromaro
+   (dockedCount ao <script>, v-for) miorina ao anaty entry-cell.
+   "height:100%" (mifanaraka amin'ny .entry-cell, izay manana habe
+   marina) mba hisian'ny "containing block" marina ho an'ny "height %"
+   an'ny .entry-piece-img ao anatiny; "display:flex" + "align-items:
+   flex-end" mba hampifanindry ny "ambany" an'ireo pion (na iray na
+   maro) amin'ny "bottom" napetraky ity "row" ity ihany (tsy voatery
+   amin'ny "bottom" tsirairay avy amin'ny img), ary "left:50% +
+   translateX(-50%)" mba hampivondrona ny vondrona (iray na maro)
+   eo afovoan'ilay cadre. */
+.entry-piece-row {
   position: absolute;
   left: 50%;
   bottom: 8%;
   transform: translateX(-50%);
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  z-index: 5;
+  pointer-events: none;
+}
+/* Raha roa (na mihoatra) pion miaraka ao anaty cadre iray ihany (jereo
+   dockedCount ao <script>) — nangatahin'ny mpampiasa: mihakely ho 90%
+   (fa tsy 130%, izay mijanona ho an'ny tokana) izy rehetra, ary ny
+   elanelana amin'ny ambany dia 20% (fa tsy 8%) mba hisy toerana ho
+   an'izy roa mifanakaiky ("mi-colle", jereo .entry-piece-row eto
+   ambony — "align-items:flex-end" no mampifanindry azy ireo, "gap:0"
+   [default] no mampikasika azy ireo). */
+.entry-piece-row-multi {
+  bottom: 20%;
+}
+/* Ilay pion "docké" tsirairay avy (mitovy convention amin'ny
+   ".piece-img": "width:auto" mba tsy hisy fanenjehana/"stretch" —
+   jereo BUGFIX ao <script>, animatePieceExit — ny "height" ihany no
+   "authoritative"). Tokana (.entry-piece-row, tsy "-multi"): 130%
+   (PIECE_DOCK_SCALE ao <script>) — tafahotra kely ny ambony (mipoitra
+   mihoatra ny taipika ambony an'ilay cadre, araka ny sary nomen'ny
+   mpampiasa). Roa na mihoatra (.entry-piece-row-multi): 90%. */
+.entry-piece-img {
   height: 130%;
   width: auto;
   max-width: none;
-  z-index: 5;
-  pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+}
+.entry-piece-row-multi .entry-piece-img {
+  height: 90%;
 }
 
 /* ========== PATH CELLS ========== */
