@@ -479,7 +479,7 @@ const PIECE_SLIDE_MS = 500
 // fa ny toerany amin'ny "bottom" (8%, mitovy amin'ny ".piece-img")
 // dia tsy miova — "bottom:8%" + "height" lehibe noho 100% dia
 // mitombo any ambony ihany (tsy mikasika ny "bottom" anchor).
-const PIECE_DOCK_SCALE = 1.8
+const PIECE_DOCK_SCALE = 1.2
 
 const animatePieceExit = async (colorKey, pieceOutIndex) => {
   const position = 4 - pieceOutIndex
@@ -853,7 +853,7 @@ body {
 /* Ilay pion "docké" (miorina ao anaty entry-cell, rehefa vita ny
    animation) — mitovy convention amin'ny ".piece-img" (bottom:8%,
    "tsy mikasika ilay taipika bottom" — TSY miova io), fa lehibe kokoa
-   noho ny cadre mihitsy (PIECE_DOCK_SCALE ao <script>, 180%) — tafahotra
+   noho ny cadre mihitsy (PIECE_DOCK_SCALE ao <script>, 120%) — tafahotra
    kely ny ambony (mipoitra mihoatra ny taipika ambony an'ilay cadre,
    araka ny sary nomen'ny mpampiasa) — "z-index" mba hijoro eo ambonin'
    ny cadre eo ambony azy (izay mifanindry aminy amin'io toe-javatra io). */
@@ -862,7 +862,7 @@ body {
   left: 50%;
   bottom: 8%;
   transform: translateX(-50%);
-  height: 180%;
+  height: 120%;
   width: auto;
   max-width: none;
   z-index: 5;
