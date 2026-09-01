@@ -442,7 +442,7 @@ const piecesOutState = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
 // miova (izay manomboka ny animation, jereo animatePieceExit), fa
 // 500ms aty aoriana, mba tsy hisy "double" (pion eo amin'ny roa
 // toerana miaraka). Raha "1" ihany, lehibe (130%, PIECE_DOCK_SCALE) sy
-// afovoany ilay pion; raha "2" na mihoatra, mihakely ho 90% avokoa
+// afovoany ilay pion; raha "2" na mihoatra, mihakely ho 95% avokoa
 // izy ireo ary mifanindry mifanakaiky (jereo .entry-piece-row-multi
 // ao amin'ny <style>).
 const dockedCount     = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
@@ -902,7 +902,7 @@ body {
   pointer-events: none;
 }
 /* Raha roa (na mihoatra) pion miaraka ao anaty cadre iray ihany (jereo
-   dockedCount ao <script>) — nangatahin'ny mpampiasa: mihakely ho 90%
+   dockedCount ao <script>) — nangatahin'ny mpampiasa: mihakely ho 95%
    (fa tsy 130%, izay mijanona ho an'ny tokana) izy rehetra, ary ny
    elanelana amin'ny ambany dia 20% (fa tsy 8%) mba hisy toerana ho
    an'izy roa mifanakaiky ("mi-colle", jereo .entry-piece-row eto
@@ -917,7 +917,7 @@ body {
    "authoritative"). Tokana (.entry-piece-row, tsy "-multi"): 130%
    (PIECE_DOCK_SCALE ao <script>) — tafahotra kely ny ambony (mipoitra
    mihoatra ny taipika ambony an'ilay cadre, araka ny sary nomen'ny
-   mpampiasa). Roa na mihoatra (.entry-piece-row-multi): 90%. */
+   mpampiasa). Roa na mihoatra (.entry-piece-row-multi): 95%. */
 .entry-piece-img {
   height: 130%;
   width: auto;
@@ -925,7 +925,7 @@ body {
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 .entry-piece-row-multi .entry-piece-img {
-  height: 90%;
+  height: 95%;
 }
 
 /* ========== PATH CELLS ========== */
