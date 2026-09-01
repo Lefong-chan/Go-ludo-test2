@@ -748,13 +748,23 @@ const applyGameState = (game) => {
   }
 }
 
-// 50ms — nangatahin'ny mpampiasa mivantana (mba ho "quasi-instantané"
-// ny fahitan'ny adversaire ny roll/fivoahan'ny pion ataoko). MARIHINA:
-// mampitombo be ny "throughput" fangatahana any amin'ny server (~20
-// fangatahana/segondra isaky ny mpilalao mandritra ny lalao, dia 40-80/s
-// raha 2-4 mpilalao) — raha misy olana amin'ny fandaniana/latence any
-// aoriana, dia eto no toerana hanovana azy indray.
-const GAME_POLL_MS = 50
+// 150ms (teo aloha: 50ms, jereo BUGFIX etsy ambany — "quota" Firestore)
+// — mbola "quasi-instantané" ny fahitan'ny adversaire ny roll/
+// fivoahan'ny pion ataoko (tsy hita mihitsy io fahatarana 100ms
+// fanampiny io, satria efa misy animation 500ms+ foana amin'ny roll
+// tsirairay), fa mampihena be ny "throughput" fangatahana (~6.7/s
+// isaky ny mpilalao fa tsy 20/s intsony, dia ~13-27/s fa tsy 40-80/s
+// raha 2-4 mpilalao).
+//
+// BUGFIX ("quota Firestore lany haingana"): 50ms (~20 lecture Firestore
+// /segondra isaky ny mpilalao, satria "get-state" dia lecture iray
+// (tx.get) isaky ny "tick") dia nahalany ilay quota Cloud Firestore
+// "Spark" (50k lecture/andro) tao anatin'ny ora vitsivitsy fotsiny,
+// na dia lalao fitsapana vitsy ihany aza — jereo koa "onVisibilityChange"
+// eto ambany (mijanona tanteraka ny polling rehefa afenina ny tab,
+// izay mampihena be kokoa ny fandaniana rehefa mijanona misokatra any
+// ambadika ny page).
+const GAME_POLL_MS = 150
 let gamePollTimer = null
 // "pollInFlight" — misoroka ny fanindronan-jina fangatahana ("get-
 // state") miaraka: raha lava kokoa noho 50ms ny valin'ny alina
@@ -789,8 +799,29 @@ const stopGamePolling = () => {
   if (gamePollTimer) { clearInterval(gamePollTimer); gamePollTimer = null }
 }
 
-onMounted(() => startGamePolling())
-onUnmounted(() => stopGamePolling())
+// "onVisibilityChange" — BUGFIX ("quota Firestore lany haingana", jereo
+// GAME_POLL_MS etsy ambony): rehefa afenina ny tab (mpampiasa niova
+// tab/application hafa, na "minimisé" ny navigateur), dia tsy misy
+// ilana azy ny mbola "get-state" isaky ny 150ms (tsy hita ny UI na
+// izahoana aza) — ka atsahatra tanteraka ny polling amin'izay, dia
+// averina manomboka avy hatrany (fetchGameState avy hatrany, tsy
+// miandry ny "tick" voalohany) rehefa hita indray ny tab.
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopGamePolling()
+  } else {
+    startGamePolling()
+  }
+}
+
+onMounted(() => {
+  startGamePolling()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+onUnmounted(() => {
+  stopGamePolling()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>
