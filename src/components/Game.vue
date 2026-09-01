@@ -442,7 +442,7 @@ const piecesOutState = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
 // miova (izay manomboka ny animation, jereo animatePieceExit), fa
 // 500ms aty aoriana, mba tsy hisy "double" (pion eo amin'ny roa
 // toerana miaraka). Raha "1" ihany, lehibe (130%, PIECE_DOCK_SCALE) sy
-// afovoany ilay pion; raha "2" (100%) na "3+" (50%), mihakely avokoa
+// afovoany ilay pion; raha "2" (100%) na "3+" (70%), mihakely avokoa
 // izy ireo ary mifanindry mifanakaiky (jereo .entry-piece-row-double/
 // -triple ao amin'ny <style>).
 const dockedCount     = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
@@ -902,13 +902,13 @@ body {
   pointer-events: none;
 }
 /* Raha roa (na mihoatra) pion miaraka ao anaty cadre iray ihany (jereo
-   dockedCount ao <script>) — ny elanelana amin'ny ambany dia 20% (fa
-   tsy 8%) mba hisy toerana ho an'izy ireo mifanakaiky ("mi-colle",
-   jereo .entry-piece-row eto ambony — "align-items:flex-end" no
-   mampifanindry azy ireo, "gap:0" [default] no mampikasika azy ireo).
-   Mitovy io 20% io na roa na telo (na mihoatra) — ny "height" ihany
-   (.entry-piece-row-double / -triple eto ambany) no miova arakaraka
-   ny isany. */
+   dockedCount ao <script>) — ny elanelana amin'ny ambany dia lehibe
+   kokoa (fa tsy 8%) mba hisy toerana ho an'izy ireo mifanakaiky
+   ("mi-colle", jereo .entry-piece-row eto ambony — "align-items:
+   flex-end" no mampifanindry azy ireo, "gap:0" [default] no
+   mampikasika azy ireo): 20% raha roa, 40% raha telo (na mihoatra,
+   jereo .entry-piece-row-triple eto ambany, mandresy lahatra ny
+   "specificity" mitovy satria aoriana kokoa ao amin'ity fichier ity). */
 .entry-piece-row-multi {
   bottom: 20%;
 }
@@ -919,7 +919,7 @@ body {
    (PIECE_DOCK_SCALE ao <script>) — tafahotra kely ny ambony (mipoitra
    mihoatra ny taipika ambony an'ilay cadre, araka ny sary nomen'ny
    mpampiasa). Roa (.entry-piece-row-double): 100%. Telo na mihoatra
-   (.entry-piece-row-triple): 50%, mba hahalalana azy telo mifanindry
+   (.entry-piece-row-triple): 70%, mba hahalalana azy telo mifanindry
    ao anaty cadre kely iray. */
 .entry-piece-img {
   height: 130%;
@@ -930,8 +930,14 @@ body {
 .entry-piece-row-double .entry-piece-img {
   height: 100%;
 }
+/* "bottom:40%" eto (fa tsy 20%, izay an'ny .entry-piece-row-multi
+   ambony) — mandresy lahatra satria mitovy "specificity" (1 class)
+   ihany fa aoriana kokoa amin'ity fichier CSS ity. */
+.entry-piece-row-triple {
+  bottom: 40%;
+}
 .entry-piece-row-triple .entry-piece-img {
-  height: 50%;
+  height: 70%;
 }
 
 /* ========== PATH CELLS ========== */
