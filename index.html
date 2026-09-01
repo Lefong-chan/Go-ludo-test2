@@ -1,13 +1,20 @@
 <!DOCTYPE html>
-<html lang="mg">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0a111f">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>GO LUDO</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/icon?family=Material+Icons" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"></noscript>
+
   <style>
+    html {
+      background: #0a111f;
+    }
+
     /* Firefox */
     * {
       scrollbar-width: none;
@@ -19,7 +26,11 @@
       -webkit-user-select: none;
       -ms-user-select: none;
       user-select: none;
-      -webkit-touch-callout: none; 
+      -webkit-touch-callout: none;
+    }
+    
+    *:focus {
+      outline: none;
     }
 
     /* Autofill fix */
@@ -53,10 +64,157 @@
       -webkit-user-drag: none;
       user-drag: none;
     }
+
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #0a111f;
+      z-index: 999999;
+    }
+
+    #boot-loader .boot-spinner {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 217, 102, 0.25);
+      border-top-color: #ffd966;
+      animation: boot-spin 0.8s linear infinite;
+    }
+
+    #boot-loader .boot-label {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #dde5f0;
+      opacity: 0.85;
+    }
+
+    @keyframes boot-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #boot-loader .boot-fail-title {
+      font-family: Arial, sans-serif;
+      font-size: 20px;
+      font-weight: bold;
+      color: #ffd966;
+    }
+
+    #boot-loader .boot-fail-text {
+      max-width: 320px;
+      padding: 0 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      text-align: center;
+      color: #dde5f0;
+    }
+
+    #boot-loader .boot-fail-retry {
+      margin-top: 4px;
+      padding: 10px 28px;
+      border: none;
+      border-radius: 8px;
+      background: #ffd966;
+      color: #0a111f;
+      font-family: Arial, sans-serif;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+  <noscript>
+    <div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0a111f;color:#dde5f0;font-family:Arial,sans-serif;text-align:center;padding:20px;z-index:9999999;">
+      <div style="font-size:20px;font-weight:bold;color:#ffd966;">JavaScript requis</div>
+      <div style="max-width:320px;font-size:14px;line-height:1.5;">L'application « GO LUDO » ne peut pas fonctionner sans JavaScript.<br><br>Si vous êtes dans une application WebView (APK, par ex. Sketchware Pro) : activez « JavaScript » dans les paramètres de la WebView (bloc setJavaScriptEnabled → True) ainsi que « DOM Storage » (setDomStorageEnabled → True), puis reconstruisez l'application.</div>
+    </div>
+  </noscript>
+
+  <div id="boot-loader">
+    <div class="boot-spinner"></div>
+    <div class="boot-label">GO LUDO</div>
+  </div>
   <div id="app"></div>
+
+  <!--
+    ── DIAGNOSTIC : "blank page" watchdog + error logger ──────────
+  -->
+  <script>
+    (function () {
+      var LOG_URL = '/api/log';
+      var sent = {};
+
+      function sendLog(payload) {
+        try {
+          var key = (payload && payload.type || '') + '|' + (payload && payload.message || '');
+          if (sent[key]) return;
+          sent[key] = true;
+
+          payload.url = window.location.href;
+          payload.userAgent = navigator.userAgent;
+          payload.viewport = window.innerWidth + 'x' + window.innerHeight;
+
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', LOG_URL, true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.send(JSON.stringify(payload));
+        } catch (e) {
+          
+        }
+      }
+
+      window.onerror = function (message, source, lineno, colno, error) {
+        sendLog({
+          type: 'window-error',
+          message: String(message),
+          stack: (error && error.stack) ? String(error.stack) : (source + ':' + lineno + ':' + colno),
+        });
+      };
+
+      // ── 2) Promise rejections (unhandled) ──────────
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event && event.reason;
+        sendLog({
+          type: 'unhandled-rejection',
+          message: (reason && reason.message) ? String(reason.message) : String(reason),
+          stack: (reason && reason.stack) ? String(reason.stack) : null,
+        });
+      });
+
+      // ── 3) "Blank page" watchdog ─────────────────────────────────
+      setTimeout(function () {
+        var appEl = document.getElementById('app');
+        var isEmpty = appEl && appEl.children.length === 0;
+        if (isEmpty) {
+          sendLog({
+            type: 'blank-page',
+            message: 'App tsy nahavita mount afaka 8s (#app mbola banga).',
+            extra: {
+              supportsModule: ('noModule' in document.createElement('script')),
+              connection: (navigator.connection && navigator.connection.effectiveType) || null,
+              language: navigator.language,
+            },
+          });
+
+          var loader = document.getElementById('boot-loader');
+          if (loader) {
+            loader.innerHTML =
+              '<div class="boot-fail-title">Oups…</div>' +
+              '<div class="boot-fail-text">Ce navigateur (ou cette connexion) met trop de temps à charger l\'application.<br>Essayez de recharger la page, ou utilisez une version plus récente de Chrome.</div>' +
+              '<button type="button" class="boot-fail-retry" onclick="window.location.reload()">Recharger</button>';
+          }
+        }
+      }, 8000);
+    })();
+  </script>
+
   <script type="module" src="./src/main.js"></script>
   <script>
     document.addEventListener('gesturestart', function (e) {
