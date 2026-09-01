@@ -479,7 +479,7 @@ const PIECE_SLIDE_MS = 500
 // fa ny toerany amin'ny "bottom" (8%, mitovy amin'ny ".piece-img")
 // dia tsy miova — "bottom:8%" + "height" lehibe noho 100% dia
 // mitombo any ambony ihany (tsy mikasika ny "bottom" anchor).
-const PIECE_DOCK_SCALE = 1.2
+const PIECE_DOCK_SCALE = 1.3
 
 const animatePieceExit = async (colorKey, pieceOutIndex) => {
   const position = 4 - pieceOutIndex
@@ -507,10 +507,16 @@ const animatePieceExit = async (colorKey, pieceOutIndex) => {
   const toLeft = targetRect.left - boardRect.left + targetRect.width / 2
   const toTop  = (targetRect.top - boardRect.top) + targetRect.height - (targetRect.height * 0.08) - toSize
 
+  // "width:auto" (tsy "width:<px>" mitovy amin'ny height) — mitovy
+  // amin'ny convention an'ny ".piece-img"/".entry-piece-img", mba tsy
+  // hisy fanolosana/fanenjehana ("stretch", lasa "matevina") an'ilay
+  // sary (izay tsy carré) rehefa ovaina ny "height" mandritra ny
+  // transition — ny "height" ihany no "authoritative", ny "width" dia
+  // manaraka ny "aspect ratio" an'ilay sary tsotra izao.
   travelPiece.src = PIECE_IMG[colorKey]
   travelPiece.style = {
     left: fromLeft + 'px', top: fromTop + 'px',
-    width: fromSize + 'px', height: fromSize + 'px',
+    width: 'auto', height: fromSize + 'px',
     transition: 'none',
   }
   travelPiece.active = true
@@ -530,8 +536,8 @@ const animatePieceExit = async (colorKey, pieceOutIndex) => {
     requestAnimationFrame(() => {
       travelPiece.style = {
         left: toLeft + 'px', top: toTop + 'px',
-        width: toSize + 'px', height: toSize + 'px',
-        transition: `left ${PIECE_SLIDE_MS}ms ease, top ${PIECE_SLIDE_MS}ms ease, width ${PIECE_SLIDE_MS}ms ease, height ${PIECE_SLIDE_MS}ms ease`,
+        width: 'auto', height: toSize + 'px',
+        transition: `left ${PIECE_SLIDE_MS}ms ease, top ${PIECE_SLIDE_MS}ms ease, height ${PIECE_SLIDE_MS}ms ease`,
       }
     })
   })
@@ -672,9 +678,29 @@ const applyGameState = (game) => {
 // aoriana, dia eto no toerana hanovana azy indray.
 const GAME_POLL_MS = 50
 let gamePollTimer = null
+// "pollInFlight" — misoroka ny fanindronan-jina fangatahana ("get-
+// state") miaraka: raha lava kokoa noho 50ms ny valin'ny alina
+// tokana (latence), dia mety hisy fangatahana maromaro miaraka an-
+// dàlana, ka ny valiny mety tsy tonga araka ny filaharana nandefasana
+// azy ireo (network "out of order") — raha izany, ny "applyGameState"
+// dia mety hahazo valiny TALOHA kokoa AORIAN'ny iray vaovao kokoa, ka
+// "miverina" ny "knownTurnIndex" amin'ny "lastRoll" efa naseho teo
+// aloha (averina ny animation-ny dice — jereo BUGFIX nangatahin'ny
+// mpampiasa: dice miverina miodina, indraindray "miaraka" amin'ny
+// roll vaovao manaraka azy avy hatrany). Ny vahaolana: tsy alefa ny
+// fangatahana manaraka raha mbola miandry ny valin'ny teo aloha (ka
+// tsy misy fifanindronan'ny valiny — tsy voatery ho "in-order" ny
+// navigateur raha samy mandeha miaraka ny fangatahana).
+let pollInFlight = false
 const fetchGameState = async () => {
-  const data = await callGame('get-state')
-  if (data && data.success) applyGameState(data.game)
+  if (pollInFlight) return
+  pollInFlight = true
+  try {
+    const data = await callGame('get-state')
+    if (data && data.success) applyGameState(data.game)
+  } finally {
+    pollInFlight = false
+  }
 }
 const startGamePolling = () => {
   stopGamePolling()
@@ -853,7 +879,7 @@ body {
 /* Ilay pion "docké" (miorina ao anaty entry-cell, rehefa vita ny
    animation) — mitovy convention amin'ny ".piece-img" (bottom:8%,
    "tsy mikasika ilay taipika bottom" — TSY miova io), fa lehibe kokoa
-   noho ny cadre mihitsy (PIECE_DOCK_SCALE ao <script>, 120%) — tafahotra
+   noho ny cadre mihitsy (PIECE_DOCK_SCALE ao <script>, 130%) — tafahotra
    kely ny ambony (mipoitra mihoatra ny taipika ambony an'ilay cadre,
    araka ny sary nomen'ny mpampiasa) — "z-index" mba hijoro eo ambonin'
    ny cadre eo ambony azy (izay mifanindry aminy amin'io toe-javatra io). */
@@ -862,7 +888,7 @@ body {
   left: 50%;
   bottom: 8%;
   transform: translateX(-50%);
-  height: 120%;
+  height: 130%;
   width: auto;
   max-width: none;
   z-index: 5;
