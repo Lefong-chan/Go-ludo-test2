@@ -58,8 +58,20 @@ function getAdmin() {
 // slots[0]=Rouge, [1]=Vert, [2]=Bleu, [3]=Jaune (mitovy amin'i api/room.js).
 const CANONICAL_ORDER = [0, 1, 3, 2]
 
-function randomDice() {
-  return 1 + Math.floor(Math.random() * 6)
+// "randomDice(sixStreak)" — nangatahin'ny mpampiasa: "cache" (P(6),
+// mitombo arakaraka ny isan'ny "6" nifanesy efa nataon'ilay mpilalao
+// mandritra ny tour tsy tapaka ankehitriny — 0, 1, na 2, jereo action
+// "roll" etsy ambany):
+//  - 0 (roll voalohany amin'ity tour ity): 40% ny mety hisian'ny "6".
+//  - 1 (efa nahazo "6" indray mandeha): 60%.
+//  - 2 (efa nahazo "6" indroa misesy — ity "roll" ity no hamantarana
+//    raha 6 fahatelo misesy): 80%.
+// Ny 5 hafa (1-5, rehefa tsy "6" ny valiny) dia mitovy indrindra ny
+// mety hiseho (uniforme amin'ny sisa aorian'ny "6").
+function randomDice(sixStreak = 0) {
+  const p6 = sixStreak >= 2 ? 0.8 : sixStreak === 1 ? 0.6 : 0.4
+  if (Math.random() < p6) return 6
+  return 1 + Math.floor(Math.random() * 5)
 }
 
 function computeTurnOrder(slots) {
@@ -71,7 +83,7 @@ function freshGame(slots) {
   return {
     turnOrder,
     turnIndex: turnOrder.length ? Math.floor(Math.random() * turnOrder.length) : 0,
-    pendingValue: randomDice(),
+    pendingValue: randomDice(0),
     lastRoll: null,
     // "piecesOut[i]" — isan'ny pion (0-4) efa nivoaka ny "yard" ho an'ny
     // slot i (0=Rouge,1=Vert,2=Bleu,3=Jaune) — mitombo iray isaky ny
@@ -81,6 +93,21 @@ function freshGame(slots) {
     // manaraka ny làlana manontolo, izay tsy notakian'ny cahier des
     // charges nomena).
     piecesOut: [0, 0, 0, 0],
+    // "rollSeq" — isa mitombo iray isaky ny roll TSIRAIRAY (na mitohy
+    // amin'ilay mpilalao ihany ny tour aza — "6" — na mifindra any
+    // amin'olon-kafa), mba hahafahan'ny client (Game.vue, applyGameState)
+    // mahita fa nisy roll vaovao na dia TSY miova aza ny "turnIndex"
+    // (jereo action "roll" etsy ambany — "6" dia mijanona amin'ilay
+    // mpilalao ihany ny tour, ka "turnIndex" tsy miova, fa "rollSeq" no
+    // manamarina fa nisy zavatra vaovao).
+    rollSeq: 0,
+    // "sixStreak" — isan'ny "6" nifanesy efa nataon'ilay mpilalao
+    // "activeSlotIndex" ankehitriny, mandritra ny tour tsy tapaka
+    // ankehitriny (0, 1, na 2) — miverina 0 isaky ny mifindra amin'ny
+    // mpilalao hafa ny tour. Ampiasain'ny "randomDice" etsy ambony (P(6)
+    // arakaraka azy io) sy ny action "roll" (hamantarana ny "6" fahatelo
+    // misesy, izay TSY hamoaka pion na hampitohy ny tour intsony).
+    sixStreak: 0,
   }
 }
 
@@ -155,9 +182,16 @@ module.exports = async function handler(req, res) {
     // rehefa tsindriany ny dice-ny manokana: manamarina fa tena tour-ny
     // marina io (tsy azo antoka ny "interactive" client-side irery,
     // satria mety ho "obsolète" kely noho ny polling — ny SERVER no
-    // "source of truth" farany), ary raha izany dia mandroso ny tour
-    // (turnIndex manaraka) sy mamorona "pendingValue" vaovao ho an'ilay
-        // mpilalao manaraka indray. ──────────────────────────────────
+    // "source of truth" farany).
+    //
+    // "turnContinues" (nangatahin'ny mpampiasa): raha "6" ny valiny
+    // (game.pendingValue, efa "prefetch" — jereo ny fanazavana etsy
+    // ambony) DIA MIJANONA amin'ilay mpilalao ihany ny tour (turnIndex
+    // TSY MIOVA), ka mbola afaka manao roll indray izy — AFA-TSY raha
+    // ity no 6 FAHATELO MISESY (game.sixStreak efa 2 talohan'ity roll
+    // ity): amin'izay dia TSY hamoaka pion intsony ilay roll (na dia
+    // "6" aza) ary mifindra amin'ny mpilalao manaraka avy hatrany ny
+    // tour, mitovy tanteraka amin'ny roll tsy 6. ──────────────────────
     if (action === 'roll') {
       const result = await db.runTransaction(async (tx) => {
         const snap = await tx.get(roomRef)
@@ -173,24 +207,39 @@ module.exports = async function handler(req, res) {
         const activeSlotIndex = game.turnOrder[game.turnIndex]
         if (mySlotIndex !== activeSlotIndex) return { error: 'not-your-turn' }
 
-        // "6" → mamoaka pion iray (raha mbola misy ao anaty "yard",
-        // <4) ho an'ilay slot nanao ilay roll — "pieceOutIndex" (0-3,
-        // ilay pion faha-N nivoaka) dia tehirizina ao anaty "lastRoll"
-        // mba hahafahan'ny client (Game.vue) mahalala raha tokony
-        // hampiseho ny animation fivoahan'ny pion (tsy ny valeur ihany).
+        const rolledValue  = game.pendingValue
+        const priorStreak  = game.sixStreak || 0
+        const isSix        = rolledValue === 6
+        const isVoidThirdSix = isSix && priorStreak >= 2
+        const turnContinues  = isSix && !isVoidThirdSix
+
+        // "6" (fa tsy 6 fahatelo misesy) → mamoaka pion iray (raha
+        // mbola misy ao anaty "yard", <4) ho an'ilay slot nanao ilay
+        // roll — "pieceOutIndex" (0-3, ilay pion faha-N nivoaka) dia
+        // tehirizina ao anaty "lastRoll" mba hahafahan'ny client
+        // (Game.vue) mahalala raha tokony hampiseho ny animation
+        // fivoahan'ny pion (tsy ny valeur ihany).
         const piecesOut = Array.isArray(game.piecesOut) ? game.piecesOut.slice() : [0, 0, 0, 0]
         let pieceOutIndex = null
-        if (game.pendingValue === 6 && piecesOut[activeSlotIndex] < 4) {
+        if (turnContinues && piecesOut[activeSlotIndex] < 4) {
           pieceOutIndex = piecesOut[activeSlotIndex]
           piecesOut[activeSlotIndex] += 1
         }
 
+        const nextTurnIndex = turnContinues ? game.turnIndex : (game.turnIndex + 1) % game.turnOrder.length
+        const nextSixStreak = turnContinues ? priorStreak + 1 : 0
+
         const newGame = {
           turnOrder:    game.turnOrder,
-          turnIndex:    (game.turnIndex + 1) % game.turnOrder.length,
-          pendingValue: randomDice(),
-          lastRoll:     { slotIndex: activeSlotIndex, value: game.pendingValue, at: Date.now(), pieceOutIndex },
+          turnIndex:    nextTurnIndex,
+          pendingValue: randomDice(nextSixStreak),
+          lastRoll:     { slotIndex: activeSlotIndex, value: rolledValue, at: Date.now(), pieceOutIndex },
           piecesOut,
+          // "rollSeq" — mitombo isaky ny roll TSIRAIRAY (na dia
+          // "turnIndex" tsy miova aza, "6" mitohy tour — jereo ny
+          // fanazavana ao amin'ny freshGame etsy ambony).
+          rollSeq:      (game.rollSeq || 0) + 1,
+          sixStreak:    nextSixStreak,
         }
         tx.update(roomRef, { game: newGame, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
         return { success: true, game: newGame }

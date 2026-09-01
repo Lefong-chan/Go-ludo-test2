@@ -372,32 +372,50 @@ const pendingValue = ref(null)
 // hahitan'ny mpilalao mazava tsara ny valiny alohan'ny hifindran'ny
 // tour, dia io ihany no mamaritra ny "interactive"/"dimmed" eo ambany).
 const activeSlotIndex = ref(null)
-// "knownTurnIndex" — ny "turnIndex" (server) farany efa "voamarina"
-// tamin'ny alalan'ny POLLING (tsy ovaina mihitsy avy amin'ny roll
-// ataoko manokana, jereo BUGFIX ao amin'ny fanazavana an'ny
-// "selfRollSlotIndex" eo ambany) — misakana tsy hiverimberina milalao
-// animation efa vita (jereo applyGameState).
-let knownTurnIndex = null
-// "selfRollSlotIndex" — BUGFIX: teo aloha dia "knownTurnIndex" ihany
-// koa no ovaina AVY HATRANY (optimiste) tao amin'ny "onRollRequest",
-// mba tsy hamerina milalao ny animation-ko manokana rehefa mahatratra
-// ny "poll" — nefa io no niteraka ilay bug ("animation miverimberina
-// / ny an'ny adversaire indraindray no miova"): raha nisy "poll" efa
-// "an-dalana" (mbola tsy nahazo ny valin'ny "roll" navoakako) tonga
-// taorian'io, dia "server tsy mbola nandroso" (mbola ilay "turnIndex"
-// TALOHA) — ka "newTurnIndex !== knownTurnIndex" (efa "an-tsoratra
-// mialoha" ilay knownTurnIndex) dia TRUE tsy nahitsy, ka "lastRoll"
-// TALOHA (an'ny mpilalao hafa, indraindray) no nalefa milalao
-// animation indray.
+// "knownRollSeq" — ny "rollSeq" (server, isa mitombo iray isaky ny
+// roll TSIRAIRAY, na mitohy amin'ilay couleur ihany ny tour aza — 6 —
+// na mifindra any amin'olon-kafa) farany efa "voamarina" tamin'ny
+// alalan'ny POLLING — misakana tsy hiverimberina milalao animation
+// efa vita (jereo applyGameState). TSY azo ampiasaina intsony ny
+// "turnIndex" ho an'io (nampiasaina teo aloha): rehefa "6" (fa tsy ny
+// 6 fahatelo misesy) dia MIJANONA amin'ilay couleur ihany ny tour
+// (jereo api/game.js), ka "turnIndex" TSY MIOVA na dia nisy roll
+// vaovao aza — ny "rollSeq" kosa dia MITOMBO FOANA isaky ny roll iray,
+// na mitohy na tsia ny tour, ka azo itokisana tsara kokoa.
+let knownRollSeq = null
+// "selfRollSlotIndex" — BUGFIX: teo aloha dia "knownRollSeq" (na
+// "knownTurnIndex" fahiny) ihany koa no ovaina AVY HATRANY (optimiste)
+// tao amin'ny "onRollRequest", mba tsy hamerina milalao ny animation-
+// ko manokana rehefa mahatratra ny "poll" — nefa io no niteraka ilay
+// bug ("animation miverimberina / ny an'ny adversaire indraindray no
+// miova"): raha nisy "poll" efa "an-dalana" (mbola tsy nahazo ny
+// valin'ny "roll" navoakako) tonga taorian'io, dia "server tsy mbola
+// nandroso" (mbola ilay "rollSeq" TALOHA) — ka "newRollSeq !==
+// knownRollSeq" (efa "an-tsoratra mialoha" ilay knownRollSeq) dia TRUE
+// tsy nahitsy, ka "lastRoll" TALOHA (an'ny mpilalao hafa, indraindray)
+// no nalefa milalao animation indray.
 //
-// Vahaolana: "knownTurnIndex" dia AVERINA ho voamarin'ny POLLING
-// ihany foana (tsy misy "optimiste" intsony) — ny "selfRollSlotIndex"
-// eto kosa no mitahiry NY SLOT nataoko roll manokana, mandra-
-// pahatongan'ny "poll" MARINA mifanaraka aminy (jereo applyGameState:
-// raha io no "lastRoll.slotIndex" hita, dia tsy averina milalao ny
-// animation-ny — efa naseho teo aloha — fa ny "knownTurnIndex" sy
-// "activeSlotIndex" ihany no havaozina/hamarinina).
+// Vahaolana: "knownRollSeq" dia AVERINA ho voamarin'ny POLLING ihany
+// foana (tsy misy "optimiste" intsony) — ny "selfRollSlotIndex" eto
+// kosa no mitahiry NY SLOT nataoko roll manokana, mandra-pahatongan'ny
+// "poll" MARINA mifanaraka aminy (jereo applyGameState: raha io no
+// "lastRoll.slotIndex" hita, dia tsy averina milalao ny animation-ny —
+// efa naseho teo aloha — fa ny "knownRollSeq" sy "activeSlotIndex"
+// ihany no havaozina/hamarinina).
 let selfRollSlotIndex = null
+// "sixStreak[couleur]" — isan'ny "6" nifanesy efa nataon'ilay mpilalao,
+// mandritra ny "tour" tsy tapaka ankehitriny (0, 1, na 2 — mitovy
+// lojika amin'ny "sixStreak" ao amin'ny server, api/game.js): mitombo
+// iray isaky ny "6" mitohy ny tour (jereo playRollSequence), miverina
+// 0 rehefa mifindra any amin'olon-kafa ny tour. Ampiasain'ny
+// onRollRequest mba hamantarana (mialoha, "prefetch") raha 6 fahatelo
+// misesy ilay roll manaraka (izay TSY hamoaka pion sy hampandroso ny
+// tour avy hatrany, jereo eo ambany) — local/optimiste ihany (tsy
+// voatahiry avy amin'ny server), mety ho "0" diso kely raha vao
+// niditra tao anaty lalao efa nandeha (ka efa mitohy 6 ny tour), fa
+// mamarina azy foana ny valin'ny server manaraka (mitovy amin'ny
+// "prefetch" hafa rehetra ato).
+const sixStreak = reactive({ red: 0, green: 0, blue: 0, yellow: 0 })
 
 const diceAnimating = reactive({ red: false, green: false, blue: false, yellow: false })
 // "postRollLock" — mandritra ny 1s manontolo (flip 500ms + grace 500ms)
@@ -580,15 +598,32 @@ const animatePieceExit = async (colorKey, pieceOutIndex) => {
 // tamin'ny polling (applyGameState) — mitovy dingana avokoa ny roa:
 // 500ms "flip" (Dice.vue → playRoll), aorian'izay 500ms "grace" (mbola
 // tsy maizina ny .dice-frame, tsy azo atsindrina na dia efa "disable"
-// aza — mba hahitana mazava tsara ny valiny), ary rehefa vita io 1s io
-// dia miditra ny "dimmed" ary mifindra amin'ny "nextActiveSlotIndex"
-// ny "activeSlotIndex" (izay vao miseho ho "enable" ilay mpilalao
-// manaraka). Raha "6" ary misy pion nivoaka (pieceOutIndex != null),
-// dia ampidirina eo anelanelan'ny 500ms flip sy ny "grace" ny 300ms
-// fihisahan'ny pion (jereo animatePieceExit, PIECE_SLIDE_MS=500ms) +
-// 500ms fanampiny — izany hoe 1500ms fa tsy 1000ms no fiandrasana
-// alohan'ny hifindran'ny tour.
+// aza — mba hahitana mazava tsara ny valiny). "turnContinues" (ilay
+// "nextActiveSlotIndex" mitovy amin'ilay couleur mihitsy nanao ilay
+// roll — 6, fa tsy 6 fahatelo misesy, jereo api/game.js) no mamaritra
+// ny fara-dingana:
+//  - Raha "turnContinues": TSY atao "dimmed" ilay cadre (mijanona
+//    "clair"), fa "enable" fotsiny indray ilay dice (postRollLock
+//    miverina "false") rehefa vita ny fiandrasana — mijanona
+//    amin'io couleur io ihany ny tour (nangatahin'ny mpampiasa: "6" →
+//    mbola afaka manao roll).
+//  - Raha tsy izany (roll tsy 6, na 6 fahatelo misesy): "dimmed" ilay
+//    cadre ary mifindra amin'ny "nextActiveSlotIndex" ny
+//    "activeSlotIndex" (izay vao miseho ho "enable" ilay mpilalao
+//    manaraka).
+// Raha "6" (fa tsy 6 fahatelo misesy) ary misy pion nivoaka
+// (pieceOutIndex != null), dia ampidirina eo anelanelan'ny 500ms flip
+// sy ny "grace" ny 300ms fihisahan'ny pion (jereo animatePieceExit,
+// PIECE_SLIDE_MS=500ms) + 500ms fanampiny — izany hoe 1500ms fa tsy
+// 1000ms no fiandrasana alohan'ny hamarinana ny dingana farany eto
+// ambony (na mifindra tour, na enable indray amin'ilay couleur ihany).
 const playRollSequence = (colorKey, value, nextActiveSlotIndex, pieceOutIndex = null) => {
+  const turnContinues = nextActiveSlotIndex === SLOT_INDEX[colorKey]
+  // Manavao ny "sixStreak" local (jereo fanazavana etsy ambony) —
+  // mitombo iray raha "6" mitohy ny tour, miverina 0 raha tsy izany
+  // (roll tsy 6, na 6 fahatelo misesy izay mampifindra ny tour).
+  sixStreak[colorKey] = (turnContinues && value === 6) ? sixStreak[colorKey] + 1 : 0
+
   diceRefs[colorKey].value?.playRoll(value)
   dimmed[colorKey]        = false
   diceAnimating[colorKey] = true
@@ -601,9 +636,14 @@ const playRollSequence = (colorKey, value, nextActiveSlotIndex, pieceOutIndex = 
 
   const handoffDelay = pieceOutIndex != null ? (500 + PIECE_SLIDE_MS + 500) : 1000
   setTimeout(() => {
-    dimmed[colorKey]       = true
     postRollLock[colorKey] = false
-    activeSlotIndex.value  = nextActiveSlotIndex
+    if (turnContinues) {
+      // "6" (voalohany na faharoa mitohy): mijanona amin'io couleur
+      // io ihany ny tour, ka "enable" fotsiny indray (tsy "dimmed").
+      return
+    }
+    dimmed[colorKey]      = true
+    activeSlotIndex.value = nextActiveSlotIndex
     // Ilay mpilalao manaraka (izay vao mahazo ny tour) dia miditra ho
     // "enable" avy hatrany (tsy maizina) amin'io fotoana io ihany koa.
     const nextColorKey = COLOR_BY_SLOT[nextActiveSlotIndex]
@@ -621,19 +661,28 @@ const onRollRequest = (colorKey) => {
   if (!interactive.value[colorKey]) return
   const value = pendingValue.value
   const order = turnOrder.value
-  const myIdxInOrder      = order.indexOf(SLOT_INDEX[colorKey])
-  const nextTurnIndex     = order.length ? (myIdxInOrder + 1) % order.length : 0
-  const nextActiveSlotIdx = order.length ? order[nextTurnIndex] : null
+  const myIdxInOrder = order.indexOf(SLOT_INDEX[colorKey])
 
-  // "6" → mivoaka pion iray (raha mbola misy ao anaty "yard") — mitovy
-  // lojika amin'ny server (jereo api/game.js → action "roll"), mba
+  // "isVoidThirdSix" — 6 fahatelo misesy (sixStreak[colorKey] efa 2,
+  // ka io roll io no fahatelo): mitovy lojika amin'ny server (jereo
+  // api/game.js → action "roll") — TSY hampitohy ny tour io roll io
+  // (miova ho an'ny mpilalao manaraka avy hatrany, na dia "6" aza), ka
+  // TSY hamoaka pion na dia mbola misy ao anaty "yard" aza.
+  const isVoidThirdSix = value === 6 && sixStreak[colorKey] >= 2
+  const turnContinues  = value === 6 && !isVoidThirdSix
+  const nextActiveSlotIdx = turnContinues
+    ? SLOT_INDEX[colorKey]
+    : (order.length ? order[(myIdxInOrder + 1) % order.length] : null)
+
+  // "6" (fa tsy 6 fahatelo misesy) → mivoaka pion iray (raha mbola
+  // misy ao anaty "yard") — mitovy lojika amin'ny server, mba
   // hahafahan'ny animation manomboka avy hatrany (tsy miandry ny
   // valin'ny server, efa fantatra mialoha ny valiny sy ny isan'ny
   // pion efa nivoaka).
-  const pieceOutIndex = (value === 6 && piecesOutState[colorKey] < 4) ? piecesOutState[colorKey] : null
+  const pieceOutIndex = (turnContinues && piecesOutState[colorKey] < 4) ? piecesOutState[colorKey] : null
 
-  // "selfRollSlotIndex" fa TSY "knownTurnIndex" no ovaina eto (jereo
-  // BUGFIX etsy ambony) — "knownTurnIndex" dia mijanona ho an'ny
+  // "selfRollSlotIndex" fa TSY "knownRollSeq" no ovaina eto (jereo
+  // BUGFIX etsy ambony) — "knownRollSeq" dia mijanona ho an'ny
   // polling ihany hamarinany azy.
   selfRollSlotIndex = SLOT_INDEX[colorKey]
   playRollSequence(colorKey, value, nextActiveSlotIdx, pieceOutIndex)
@@ -641,12 +690,13 @@ const onRollRequest = (colorKey) => {
 }
 
 // "applyGameState" — polling (fetchGameState eo ambany). Voalohany
-// (knownTurnIndex === null): mametraka ny statut ankehitriny mivantana
+// (knownRollSeq === null): mametraka ny statut ankehitriny mivantana
 // (tsy misy animation ilaina, satria mbola tsy nisy roll niseho teo
-// imason'ity client ity). Manaraka: raha hafa amin'ny "knownTurnIndex"
+// imason'ity client ity). Manaraka: raha hafa amin'ny "knownRollSeq"
 // (voamarina, poll fotsiny — jereo BUGFIX ao amin'ny "selfRollSlotIndex"
-// etsy ambony) ny "turnIndex" navoakan'ny server, dia midika izany fa
-// nisy roll VAO VOAMARIN'NY SERVER — raha "lastRoll.slotIndex" dia ny
+// etsy ambony) ny "rollSeq" navoakan'ny server, dia midika izany fa
+// nisy roll VAOVAO VOAMARIN'NY SERVER (na dia mijanona amin'ilay
+// couleur ihany aza ny tour, "6") — raha "lastRoll.slotIndex" dia ny
 // slot nataoko roll manokana (selfRollSlotIndex), dia tsy averina
 // milalao ny animation-ny (efa naseho tany am-boalohany, tamin'ny
 // onRollRequest); raha tsy izany (an'olon-kafa), dia vao alefa ny
@@ -656,12 +706,13 @@ const applyGameState = (game) => {
   const order         = game.turnOrder || []
   const newTurnIndex  = game.turnIndex ?? 0
   const newActiveSlot = order.length ? order[newTurnIndex] : null
+  const newRollSeq    = game.rollSeq ?? 0
 
   turnOrder.value    = order
   pendingValue.value = game.pendingValue ?? null
 
-  if (knownTurnIndex === null) {
-    knownTurnIndex = newTurnIndex
+  if (knownRollSeq === null) {
+    knownRollSeq = newRollSeq
     turnIndex.value = newTurnIndex
     activeSlotIndex.value = newActiveSlot
     for (const key of COLOR_BY_SLOT) dimmed[key] = SLOT_INDEX[key] !== newActiveSlot
@@ -676,9 +727,9 @@ const applyGameState = (game) => {
     return
   }
 
-  if (newTurnIndex === knownTurnIndex) return // tsy nisy fiovana (poll "an-dalana" na mbola tsy nandroso ny server)
+  if (newRollSeq === knownRollSeq) return // tsy nisy roll vaovao (poll "an-dalana" na mbola tsy nandroso ny server)
 
-  knownTurnIndex  = newTurnIndex
+  knownRollSeq    = newRollSeq
   turnIndex.value = newTurnIndex
 
   const rolledSlotIndex = game.lastRoll ? game.lastRoll.slotIndex : null
@@ -711,7 +762,7 @@ let gamePollTimer = null
 // dàlana, ka ny valiny mety tsy tonga araka ny filaharana nandefasana
 // azy ireo (network "out of order") — raha izany, ny "applyGameState"
 // dia mety hahazo valiny TALOHA kokoa AORIAN'ny iray vaovao kokoa, ka
-// "miverina" ny "knownTurnIndex" amin'ny "lastRoll" efa naseho teo
+// "miverina" ny "knownRollSeq" amin'ny "lastRoll" efa naseho teo
 // aloha (averina ny animation-ny dice — jereo BUGFIX nangatahin'ny
 // mpampiasa: dice miverina miodina, indraindray "miaraka" amin'ny
 // roll vaovao manaraka azy avy hatrany). Ny vahaolana: tsy alefa ny
