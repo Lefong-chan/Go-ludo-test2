@@ -116,8 +116,6 @@
 <script setup>
 import { ref } from 'vue'
 import { fetchWithTimeout } from '../utils/network'
-import { signInWithEmailAndPassword } from 'firebase/auth'
-import { auth } from '../firebase'
 
 const emit = defineEmits(['auth-success'])
 
@@ -201,22 +199,6 @@ const handleSubmit = async () => {
       wallet: data.wallet,
       email: data.email,
     }))
-
-    // "signInWithEmailAndPassword" (Firebase CLIENT SDK, jereo
-    // ../firebase) — mitovy kaonty amin'ny "data.uid" navoakan'ny
-    // api/auth.js (Firebase Authentication tena izy io koa, jereo
-    // fanazavana ao amin'ny api/auth.js) — mamorona session Firebase
-    // Auth marina ho an'ny navigateur, ilaina mba hahazoan'ny client
-    // MAMAKY MIVANTANA (onSnapshot, jereo Game.vue) ny "gameStates/
-    // {roomId}" any amin'ny Firestore (jereo firestore.rules:
-    // "request.auth != null"). "Tsy fatal" raha tsy nahomby (log
-    // fotsiny) — Game.vue dia miverina amin'ny "polling" HTTP raha tsy
-    // misy session Firebase Auth (fallback, tsy hisy tapaka ny lalao).
-    try {
-      await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
-    } catch (e) {
-      console.warn('Firebase client sign-in nahomby tsy tanteraka (fallback polling):', e)
-    }
 
     emit('auth-success', data)
   } catch (e) {

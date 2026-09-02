@@ -4,42 +4,41 @@
 // (fihodinan'ny roll dice sy ny valin'ny roll tsirairay) — mitovy
 // "backend" (Firestore) amin'i api/room.js (izay mbola miandraikitra
 // ny "salon": slots/stake/status/mot de passe/sns, document
-// "rooms/{roomId}"), fa io "gameStates/{roomId}" (collection Firestore
-// MANOKANA, tsy anaty "rooms/{roomId}" intsony — jereo BUGFIX etsy
+// "rooms/{roomId}", Firestore), fa io "gameStates/{roomId}" (Firebase
+// REALTIME DATABASE — RTDB, TSY Firestore intsony — jereo BUGFIX etsy
 // ambany) no toerana itehirizana ny statut an'ny lalao mandritra ny
 // fotoana (turnOrder/turnIndex/pendingValue/lastRoll/piecesOut/
 // rollSeq/sixStreak — jereo eo ambany).
 //
-// BUGFIX (2026-09, "quota Firestore lany haingana" — jereo Game.vue,
-// GAME_POLL_MS): teo aloha, ny "game" dia sub-objet anaty "room.game"
-// (document "rooms/{roomId}" iray ihany, miaraka amin'ny slots/mot de
-// passe/mise, sns), ka mba hahitan'ny client ny fivoahan'ny roll
-// (fahitana "instantané" ny roll ataon'ny adversaire — nangatahin'ny
-// mpampiasa) dia nisy "polling" HTTP (isaky ny 150ms, teo aloha 50ms)
-// nandalo tamin'ny "get-state" — nahalany haingana ny quota "lecture"
-// Firestore. Amin'izao dia nafindra ho collection Firestore MANOKANA
-// ("gameStates/{roomId}") ilay "game" (tsy misy angona "sensible" ao
-// anatiny — tsy misy uid, mot de passe, mise, jereo eo ambany), mba
-// hahafahan'ny CLIENT (Game.vue) MAMAKY AZY MIVANTANA amin'ny alalan'
-// ny Firestore "realtime listener" (onSnapshot, jereo src/firebase.js)
-// — tsy misy "lecture" intsony raha tsy niova tokoa ilay document (fa
-// tsy isaky ny "tick", na niova na tsy niova). "Security rules" (jereo
-// firestore.rules) no misakana tsy hahazoan'ny client MANORATRA
-// mivantana io document io (ny SERVER, io fichier io, ihany no manoratra
-// azy io, amin'ny alalan'ny "roll" — ny "get-state" dia mbola ilaina
-// ihany (fa AVERINA ho antsoina IN-DRAY MANDEHA fotsiny, tsy "polling"
-// intsony) mba hisian'ny document "gameStates/{roomId}" (ensureGame)
-// ALOHAN'NY hanaovan'ny client "onSnapshot" azy io.
+// BUGFIX (2026-09, "roll tsy mifindra any amin'ny adversaire"):
+// nampiasa Firestore "realtime listener" (onSnapshot) ny version teo
+// aloha ho an'ny "gameStates" — nefa raha tsy voakonfigiora tsara ny
+// session Firebase Auth client-side (VITE_FIREBASE_* env vars/mot de
+// passe login) na tsy azo tratrarina ny backend Firestore, dia
+// "onSnapshot" TSY MIANTSO ny "error callback" (izay natao hiverina
+// amin'ny "polling" ho "fallback") — miantso NY "SUCCESS callback"
+// ihany, miaraka amin'ny "snapshot" AN-TOERANA (cache "offline", tsy
+// misy angona) — ka "silencieux" ny fahatapahan'ny fifandraisana,
+// tsy nisy "fallback" niasa. Nangatahin'ny mpampiasa: mifindra ho
+// Firebase REALTIME DATABASE (RTDB, izay efa nampiasaina teo aloha ho
+// an'ny "wallets/{uid}", jereo api/wallet.js) — TSOTRA kokoa (JSON
+// tree, "rules" tsotra kokoa), ary "public read" (tsy mitaky session
+// Firebase Auth mihitsy, jereo database.rules.json) — tsy misy
+// "angona sensible" ao anatin'ny "gameStates" (tsy misy uid, mot de
+// passe, mise) ka azo "vakiana" foana. Ny "write" kosa dia mijanona
+// amin'ny SERVER ihany (io fichier io, amin'ny alalan'ny "roll") —
+// ny "database.rules.json" no mandrara ny "write" mivantana amin'ny
+// client.
 //
 // ── Lojika ("valin'ny roll dia ny SERVER ihany no mitantana azy, ny
 //    client dia mampiseho fotsiny") ──────────────────────────────────
 // "pendingValue" — ilay isa (1-6) VOAOMANINA MIALOHA ho an'ilay
 // mpilalao manaraka HANAO roll (ampiasain'ny Game.vue "prefetch": efa
-// mipetraka ao amin'ny client, avy amin'ny "get-state"/onSnapshot,
+// mipetraka ao amin'ny client, avy amin'ny "get-state"/RTDB listener,
 // ALOHAN'NY hanindriany ny dice-ny, ka rehefa tsindriana dia miseho
 // avy hatrany (tsy miandry valin'ny server intsony amin'io fotoana
 // io) ny "roll") — ary "lastRoll" no ampahafantarana NY MPILALAO HAFA
-// REHETRA (onSnapshot koa) fa vao avy nanao roll ny mpilalao iray
+// REHETRA (RTDB listener koa) fa vao avy nanao roll ny mpilalao iray
 // (mba hahitany ny animation/valiny eo amin'ny écran-ny manokana koa,
 // tsy izy ihany no mahita).
 //
@@ -133,38 +132,11 @@ function freshGame(slots) {
   }
 }
 
-// "withUpdatedAt" — "updatedAt" (Firestore serverTimestamp) dia
-// AMPIANA ETO IHANY, tsy ao anaty "game" (freshGame/newGame) mihitsy —
-// io "game" io dia averina AMIN'NY CLIENT (res.json) sy averina
-// AMPIASAINA ao anaty "transaction" (ensureGame fast-path) ihany koa,
-// ka tsy tokony hisy ilay "sentinel" FieldValue.serverTimestamp() (izay
-// tsy "valeur" azo "JSON.stringify" mazava tsara, fa toromarika ho an'
-// ny Firestore fotsiny, tsy misy dikany raha tsy amin'ny "write" mihitsy)
-// ao anatiny. "updatedAt" dia ho an'ny FIRESTORE DOCUMENT ihany (mba
-// hahafahana mametraka "TTL policy" any aoriana, jereo firestore.rules),
-// tsy misy mpampiasa azy amin'izao fotoana izao.
-function withUpdatedAt(game) {
-  return { ...game, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
-}
-
-// "ensureGame" — raha mbola tsy misy "gameStates/{roomId}" (voalohan'ny
-// "get-state"/"roll" antsoina taorian'ny "start-game"), dia amoronina
-// (kisendrasendra ny mpandray ny roll voalohany) sy tehirizina eo
-// noho eo (tx.set) — atao ao anaty "transaction" mba tsy hisy "race
-// condition" raha samy mety hiantso azy io miaraka ny mpilalao maro
-// (isaky ny mahita fa mbola tsy misy "game" izy ireo). TSY misy
-// fifehezana raha misy mpilalao miala mandritra ny lalao (ny slot-ny
-// dia mijanona ao anaty "turnOrder" hatrany, ka raha sendra tonga ny
-// tour-ny dia hijanona eo io — tsy zavatra notakian'ny cahier des
-// charges nomena, ka tsy natao eto).
-function ensureGame(tx, gameRef, gameSnap, slots) {
-  if (gameSnap.exists) {
-    const game = gameSnap.data()
-    if (Array.isArray(game.turnOrder) && game.turnOrder.length) return game
-  }
-  const game = freshGame(slots)
-  tx.set(gameRef, withUpdatedAt(game))
-  return game
+// "isValidGame" — "gameStates/{roomId}" (RTDB) dia efa "voafaritra
+// tsara" (misy roll efa natao teo aloha, na vao "freshGame") raha
+// misy "turnOrder" (array, tsy tsinontsinona).
+function isValidGame(game) {
+  return !!game && Array.isArray(game.turnOrder) && game.turnOrder.length > 0
 }
 
 module.exports = async function handler(req, res) {
@@ -195,35 +167,40 @@ module.exports = async function handler(req, res) {
   try {
     const adm = getAdmin()
     const db = adm.firestore()
+    const rtdb = adm.database()
     const roomRef = db.collection('rooms').doc(roomId)
-    const gameRef = db.collection('gameStates').doc(roomId)
+    const gameRef = rtdb.ref('gameStates/' + roomId)
 
     // ── "get-state" — antsoina IN-DRAY MANDEHA fotsiny (jereo Game.vue,
     // onMounted) mba hahazoana ny statut voalohany ary hisian'ny
-    // document "gameStates/{roomId}" (ensureGame) ALOHAN'NY hanaovan'ny
-    // client "onSnapshot" azy io (jereo BUGFIX etsy ambony) — TSY
-    // "polling" intsony, ny "onSnapshot" (client, src/firebase.js) no
-    // mitantana ny fanavaozana manaraka rehetra. ──────────────────
+    // document "gameStates/{roomId}" (RTDB) ALOHAN'NY hanaovan'ny
+    // client ny listener (onValue) azy io — TSY "polling" intsony, ny
+    // listener RTDB (client, src/firebase.js) no mitantana ny
+    // fanavaozana manaraka rehetra. ──────────────────
     if (action === 'get-state') {
-      const result = await db.runTransaction(async (tx) => {
-        const roomSnap = await tx.get(roomRef)
-        if (!roomSnap.exists) return { error: 'room-gone' }
-        const room = roomSnap.data()
-        if (room.status !== 'playing') return { success: true, game: null }
-        const gameSnap = await tx.get(gameRef)
-        const game = ensureGame(tx, gameRef, gameSnap, room.slots)
-        return { success: true, game }
+      const roomSnap = await roomRef.get()
+      if (!roomSnap.exists) { res.status(404).json({ message: 'Ce salon n\'existe plus.' }); return }
+      const room = roomSnap.data()
+      if (room.status !== 'playing') { res.status(200).json({ success: true, game: null }); return }
+
+      // "ref.transaction" (RTDB): mamorona "freshGame" raha mbola tsy
+      // misy (na simba) ilay document, ao anaty "transaction" (tsy
+      // hisy "race condition" raha samy mety hiantso azy io miaraka
+      // ny mpilalao maro amin'io fotoana io ihany, mitovy tanteraka
+      // amin'ny "ensureGame" teo aloha, Firestore).
+      const txResult = await gameRef.transaction((current) => {
+        if (isValidGame(current)) return current
+        return freshGame(room.slots)
       })
-      if (result.error === 'room-gone') { res.status(404).json({ message: 'Ce salon n\'existe plus.' }); return }
-      res.status(200).json(result)
+      res.status(200).json({ success: true, game: txResult.snapshot.val() })
       return
     }
 
     // ── "roll" — antsoin'ny mpilalao (Game.vue → Dice.vue "press")
     // rehefa tsindriany ny dice-ny manokana: manamarina fa tena tour-ny
     // marina io (tsy azo antoka ny "interactive" client-side irery,
-    // satria mety ho "obsolète" kely noho ny polling — ny SERVER no
-    // "source of truth" farany).
+    // satria mety ho "obsolète" kely — ny SERVER no "source of truth"
+    // farany).
     //
     // "turnContinues" (nangatahin'ny mpampiasa): raha "6" ny valiny
     // (game.pendingValue, efa "prefetch" — jereo ny fanazavana etsy
@@ -232,26 +209,40 @@ module.exports = async function handler(req, res) {
     // ity no 6 FAHATELO MISESY (game.sixStreak efa 2 talohan'ity roll
     // ity): amin'izay dia TSY hamoaka pion intsony ilay roll (na dia
     // "6" aza) ary mifindra amin'ny mpilalao manaraka avy hatrany ny
-    // tour, mitovy tanteraka amin'ny roll tsy 6. ──────────────────────
+    // tour, mitovy tanteraka amin'ny roll tsy 6.
+    //
+    // "abortReason" (closure, jereo etsy ambany) — RTDB "transaction"
+    // dia tsy manome afa-tsy ny valeur vaovao (na "undefined" raha
+    // hatsahatra/"abort") avy amin'ny "update function"-ny, ka
+    // ampiasaina ity "closure variable" ity hitehirizana NY ANTONY
+    // ("not-in-room"/"not-your-turn") mba hahafahana mamerina hafatra
+    // marina amin'ny client (tsy misy "payload" hafa azo averina
+    // avy amin'ny "abort" an'ny RTDB transaction mihitsy). ──────────
     if (action === 'roll') {
-      const result = await db.runTransaction(async (tx) => {
-        const roomSnap = await tx.get(roomRef)
-        if (!roomSnap.exists) return { error: 'room-gone' }
-        const room = roomSnap.data()
-        if (room.status !== 'playing') return { error: 'not-playing' }
+      const roomSnap = await roomRef.get()
+      if (!roomSnap.exists) { res.status(404).json({ message: 'Ce salon n\'existe plus.' }); return }
+      const room = roomSnap.data()
+      if (room.status !== 'playing') { res.status(400).json({ message: 'La partie n\'est pas en cours.' }); return }
 
-        const slots = room.slots || [null, null, null, null]
-        const mySlotIndex = slots.findIndex(s => s && s.uid === uid)
-        if (mySlotIndex === -1) return { error: 'not-in-room' }
+      const slots = room.slots || [null, null, null, null]
+      const mySlotIndex = slots.findIndex(s => s && s.uid === uid)
+      if (mySlotIndex === -1) { res.status(400).json({ message: 'Vous n\'êtes pas dans ce salon.' }); return }
 
-        const gameSnap = await tx.get(gameRef)
-        const game = ensureGame(tx, gameRef, gameSnap, slots)
+      let abortReason = null
+      let committedGame = null
+
+      const txResult = await gameRef.transaction((current) => {
+        abortReason = null
+        const game = isValidGame(current) ? current : freshGame(slots)
         const activeSlotIndex = game.turnOrder[game.turnIndex]
-        if (mySlotIndex !== activeSlotIndex) return { error: 'not-your-turn' }
+        if (mySlotIndex !== activeSlotIndex) {
+          abortReason = 'not-your-turn'
+          return // "abort" — tsy manoratra na inona na inona.
+        }
 
-        const rolledValue  = game.pendingValue
-        const priorStreak  = game.sixStreak || 0
-        const isSix        = rolledValue === 6
+        const rolledValue    = game.pendingValue
+        const priorStreak    = game.sixStreak || 0
+        const isSix          = rolledValue === 6
         const isVoidThirdSix = isSix && priorStreak >= 2
         const turnContinues  = isSix && !isVoidThirdSix
 
@@ -283,14 +274,17 @@ module.exports = async function handler(req, res) {
           rollSeq:      (game.rollSeq || 0) + 1,
           sixStreak:    nextSixStreak,
         }
-        tx.set(gameRef, withUpdatedAt(newGame))
-        return { success: true, game: newGame }
+        committedGame = newGame
+        return newGame
       })
-      if (result.error === 'room-gone')    { res.status(404).json({ message: 'Ce salon n\'existe plus.' }); return }
-      if (result.error === 'not-playing')  { res.status(400).json({ message: 'La partie n\'est pas en cours.' }); return }
-      if (result.error === 'not-in-room')  { res.status(400).json({ message: 'Vous n\'êtes pas dans ce salon.' }); return }
-      if (result.error === 'not-your-turn') { res.status(403).json({ message: 'Ce n\'est pas votre tour.' }); return }
-      res.status(200).json(result)
+
+      if (abortReason === 'not-your-turn') { res.status(403).json({ message: 'Ce n\'est pas votre tour.' }); return }
+      if (!txResult.committed || !committedGame) {
+        res.status(500).json({ message: 'Impossible de faire ce lancer. Réessayez.' })
+        return
+      }
+
+      res.status(200).json({ success: true, game: committedGame })
       return
     }
 

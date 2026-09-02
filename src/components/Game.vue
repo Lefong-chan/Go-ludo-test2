@@ -224,8 +224,8 @@ import { computed, ref, reactive, nextTick, onMounted, onUnmounted } from 'vue'
 import Dice from './Dice.vue'
 import ModalSettings from './modals/ModalSettings.vue'
 import { fetchWithTimeout } from '../utils/network'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../firebase'
+import { ref as rtdbRef, onValue } from 'firebase/database'
+import { rtdb } from '../firebase'
 // Sary ny pion — import mivantana (fa tsy "src" tsotra ao amin'ny
 // <template>) satria ilaina ao anaty JS (travelPiece.src, jereo
 // animatePieceExit eo ambany), tsy amin'ny <template> fotsiny.
@@ -751,72 +751,43 @@ const applyGameState = (game) => {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ── Synchronisation an'ny "game" — Firestore "realtime listener"
+// ── Synchronisation an'ny "game" — Firebase Realtime Database (RTDB)
 // ══════════════════════════════════════════════════════════════════
-// BUGFIX ("quota Firestore lany haingana", 2026-09): teo aloha, dia
-// "polling" HTTP tsotra (isaky ny 50ms tany am-boalohany, avy eo
-// 150ms) no nampiasaina eto — nahalany haingana ny quota "lecture"
-// Firestore (50k/andro amin'ny forfait "Spark") satria "get-state" dia
-// lecture Firestore iray (tx.get) isaky ny "tick", na niova na tsy
-// niova ilay statut. Amin'izao dia Firestore "realtime listener"
-// (onSnapshot, jereo src/firebase.js) mivantana amin'ny document
-// "gameStates/{roomId}" (nafindra tao amin'ny api/game.js, tsy anaty
-// "rooms/{roomId}" intsony) no fototra ampiasaina — tsy misy "lecture"
-// intsony raha tsy niova tokoa ilay document.
+// BUGFIX ("roll tsy mifindra any amin'ny adversaire", 2026-09): ny
+// version teo aloha dia nampiasa Firestore "onSnapshot" — nefa raha
+// tsy azo tratrarina ny backend Firestore (session Firebase Auth
+// client tsy nety/tsy voakonfigiora ny env vars, sns), dia
+// "onSnapshot" TSY MIANTSO ny "error callback" (izay tokony hiverina
+// amin'ny "fallback") — miantso NY "SUCCESS callback" ihany, miaraka
+// amin'ny "snapshot" AN-TOERANA ("cache offline", tsy misy angona,
+// exists()=false) — "silencieux" ny fahatapahan'ny fifandraisana: ny
+// mpilalao nanao roll dia mahita ilay valiny (local, "prefetch") fa
+// ny adversaire tsy mahita mihitsy (ny listener-ny very, tsy niasa).
 //
-// "callGame('get-state')" (fetchGameState) dia mbola antsoina, fa
-// IN-DRAY MANDEHA fotsiny (tsy "polling" intsony) — ny anjarany dia
-// ny hisian'ny document "gameStates/{roomId}" (ensureGame, jereo
-// api/game.js) ALOHAN'NY hanaovan'ny listener azy io, satria mety mbola
-// tsy misy ilay document (raha vao "playing" ilay salon, mbola tsy
-// nisy roll indray mihitsy).
-//
-// "startGamePolling"/"stopGamePolling"/GAME_POLL_MS (jereo etsy
-// ambany) dia TSY nofafana — mijanona ho "fallback" raha tsy nahomby
-// ny session Firebase Auth an'ilay client (jereo Auth.vue,
-// signInWithEmailAndPassword — mety tsy nety noho ny antony maro,
-// ohatra: "permission-denied" avy amin'ny firestore.rules raha tsy
-// nahomby ilay "sign-in") — jereo ny "onSnapshotError" ao amin'ny
-// "startGameListener" eto ambany, izay miverina amin'ny "polling"
-// tsotra raha misy olana amin'ny listener, mba tsy hisy tapaka ny
-// lalao na dia amin'io tranga mahazatra kely io aza.
-const GAME_POLL_MS = 150
-let gamePollTimer = null
-let pollInFlight = false
+// Nangatahin'ny mpampiasa: mifindra ho Firebase REALTIME DATABASE
+// (RTDB, efa nampiasaina teo aloha ho an'ny "wallets/{uid}", jereo
+// api/wallet.js) ho an'ny "gameStates/{roomId}" (jereo api/game.js) —
+// "public read" izy io (jereo database.rules.json — tsy misy angona
+// "sensible" ao anatiny: tsy misy uid, mot de passe, mise), ka TSY
+// mila session Firebase Auth client intsony ny listener (tsy misy
+// "permission-denied" mety hiseho amin'ny tranga mahazatra). Tsy
+// mampiasa "polling" INTSONY ho an'ity fifandraisana ity
+// (nangatahin'ny mpampiasa) — ny listener RTDB (onValue) ihany no
+// mitantana ny fanavaozana rehetra, aorian'ny "get-state" IN-DRAY
+// MANDEHA (fetchGameState, tsy "polling") hisian'ny document
+// (ensureGame, api/game.js) ALOHAN'NY hanaovana azy io.
 const fetchGameState = async () => {
-  if (pollInFlight) return
-  pollInFlight = true
-  try {
-    const data = await callGame('get-state')
-    if (data && data.success) applyGameState(data.game)
-  } finally {
-    pollInFlight = false
-  }
-}
-const startGamePolling = () => {
-  stopGamePolling()
-  fetchGameState()
-  gamePollTimer = setInterval(fetchGameState, GAME_POLL_MS)
-}
-const stopGamePolling = () => {
-  if (gamePollTimer) { clearInterval(gamePollTimer); gamePollTimer = null }
+  const data = await callGame('get-state')
+  if (data && data.success) applyGameState(data.game)
 }
 
 let unsubscribeGameState = null
 const startGameListener = () => {
   stopGameListener()
-  unsubscribeGameState = onSnapshot(
-    doc(db, 'gameStates', props.roomId),
-    (snap) => { if (snap.exists()) applyGameState(snap.data()) },
-    (err) => {
-      // "permission-denied" (session Firebase Auth tsy nety, jereo
-      // fanazavana etsy ambony) na olana hafa amin'ny listener —
-      // miverina amin'ny "polling" tsotra (fallback), mba tsy hisy
-      // tapaka ny lalao.
-      console.warn('onSnapshot gameStates nahomby tsy tanteraka, miverina amin\'ny polling:', err)
-      stopGameListener()
-      startGamePolling()
-    }
+  unsubscribeGameState = onValue(
+    rtdbRef(rtdb, 'gameStates/' + props.roomId),
+    (snap) => { if (snap.exists()) applyGameState(snap.val()) },
+    (err) => console.error('Listener RTDB gameStates nahomby tsy tanteraka:', err)
   )
 }
 const stopGameListener = () => {
@@ -830,7 +801,7 @@ const stopGameListener = () => {
 // afenina indray, na "unmounted" ny composant) mandritra ny
 // fiandrasana ny "await fetchGameState()", dia tsy tokony hanomboka
 // ny listener (startGameListener) intsony ilay "startGameSync" rehefa
-// vita ny fiandrasana — raha tsy izany dia mety hisy listener Firestore
+// vita ny fiandrasana — raha tsy izany dia mety hisy listener RTDB
 // "very" (tsy voa-"unsubscribe" mihitsy, satria efa lasa ilay
 // "stopGameSync" ALOHAN'ny nahavitan'ny listener natao) mandeha
 // mandrakizay any ambadika.
@@ -844,15 +815,13 @@ const startGameSync = async () => {
 const stopGameSync = () => {
   syncActive = false
   stopGameListener()
-  stopGamePolling()
 }
 
 // "onVisibilityChange" — rehefa afenina ny tab (mpampiasa niova tab/
 // application hafa, na "minimisé" ny navigateur), dia tsy misy ilana
-// azy ny mbola mitazona ny listener/polling (tsy hita ny UI na
-// izahoana aza) — ka atsahatra tanteraka ny fifandraisana amin'izay,
-// dia averina manomboka avy hatrany (tsy miandry) rehefa hita indray
-// ny tab.
+// azy ny mbola mitazona ny listener (tsy hita ny UI na izahoana aza)
+// — ka atsahatra tanteraka ny fifandraisana amin'izay, dia averina
+// manomboka avy hatrany (tsy miandry) rehefa hita indray ny tab.
 const onVisibilityChange = () => {
   if (document.hidden) {
     stopGameSync()

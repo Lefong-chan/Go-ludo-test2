@@ -1,0 +1,22 @@
+// database.rules.json — Firebase REALTIME DATABASE (RTDB) rules.
+//
+// Ity fichier ity dia SNIPPET fanampiny ho an'ny "gameStates" AVOKOA —
+// AZA SOLOANA TANTERAKA ny rules efa misy any amin'ny Firebase
+// Console (Realtime Database → Règles) raha efa misy rules ho an'ny
+// "wallets/{uid}" (jereo api/wallet.js) na sisa — AMPIO ("merge") ny
+// "gameStates" ao anaty ilay "rules" efa misy.
+//
+// "gameStates/{roomId}" (jereo api/game.js) dia tsy misy angona
+// "sensible" (tsy misy uid, mot de passe, mise) ka "public read"
+// (.read: true, tsy mitaky session Firebase Auth). ".write": false
+// satria ny SERVER ihany (firebase-admin, api/game.js action "roll")
+// no manoratra azy io — ny admin SDK dia MANDINGANA ("bypass") ireto
+// "rules" ireto foana, na inona na inona lazain'izy ireo.
+{
+  "rules": {
+    "gameStates": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}
